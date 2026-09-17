@@ -57,8 +57,12 @@ them the way there would be if they lived in one database from the start.
 
 ## Stack
 
-Same shape as `apps`: an npm-workspaces monorepo, Express + `better-sqlite3`
-server, Vite + React + TypeScript frontend, no external services.
+Same shape as `apps` (npm-workspaces monorepo, Express + SQLite server,
+Vite + React + TypeScript frontend, no external services), but on
+`node:sqlite` (built into Node 22.5+) instead of `better-sqlite3` — that
+avoids a native-compilation step (`node-gyp`) that fails behind corporate
+TLS-intercepting proxies. Requires Node 22.5+; the "SQLite is an
+experimental feature" warning on startup is expected and harmless.
 
 ```
 npm install

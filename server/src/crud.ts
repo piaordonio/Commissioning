@@ -32,7 +32,7 @@ router.delete("/projects/:id", (req, res) => {
 router.get("/equipment", (req, res) => {
   const { project_id } = req.query;
   if (project_id) {
-    res.json(db.prepare("SELECT * FROM equipment WHERE project_id = ? ORDER BY tag").all(project_id));
+    res.json(db.prepare("SELECT * FROM equipment WHERE project_id = ? ORDER BY tag").all(String(project_id)));
   } else {
     res.json(db.prepare("SELECT * FROM equipment ORDER BY tag").all());
   }
@@ -42,7 +42,7 @@ router.put("/equipment/:id", (req, res) => {
   const allowed = ["tag", "equipment_type", "location", "notes", "blocked_by"] as const;
   const patch = req.body ?? {};
   const sets: string[] = [];
-  const vals: unknown[] = [];
+  const vals: (string | number)[] = [];
   for (const key of allowed) {
     if (key in patch) {
       sets.push(`${key} = ?`);
@@ -69,7 +69,7 @@ router.get("/points", (req, res) => {
          WHERE equipment.project_id = ?
          ORDER BY points.point_number`
       )
-      .all(project_id)
+      .all(String(project_id))
   );
 });
 
@@ -77,7 +77,7 @@ router.put("/points/:id", (req, res) => {
   const allowed = ["notes", "blocked_by", ...CHECK_FIELDS] as const;
   const patch = req.body ?? {};
   const sets: string[] = [];
-  const vals: unknown[] = [];
+  const vals: (string | number)[] = [];
   for (const key of allowed) {
     if (key in patch) {
       sets.push(`${key} = ?`);
@@ -98,13 +98,17 @@ router.post("/points/bulk", (req, res) => {
   if (!Array.isArray(updates)) return res.status(400).json({ error: "updates array is required" });
   const validFields = new Set([...CHECK_FIELDS, "notes", "blocked_by"]);
   const ts = now();
-  const txn = db.transaction(() => {
+  db.exec("BEGIN");
+  try {
     for (const u of updates) {
       if (!validFields.has(u.field)) continue;
       db.prepare(`UPDATE points SET ${u.field} = ?, updated_at = ? WHERE id = ?`).run(u.value, ts, u.id);
     }
-  });
-  txn();
+    db.exec("COMMIT");
+  } catch (err) {
+    db.exec("ROLLBACK");
+    throw err;
+  }
   res.status(204).end();
 });
 
@@ -128,7 +132,8 @@ router.post("/import", (req, res) => {
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
 
-  const txn = db.transaction(() => {
+  db.exec("BEGIN");
+  try {
     for (const eq of equipment) {
       const id = randomUUID();
       tempIdToRealId.set(eq.tempId, id);
@@ -149,8 +154,11 @@ router.post("/import", (req, res) => {
         ts
       );
     }
-  });
-  txn();
+    db.exec("COMMIT");
+  } catch (err) {
+    db.exec("ROLLBACK");
+    throw err;
+  }
 
   res.status(201).json({ equipment_count: equipment.length, point_count: points.length });
 });

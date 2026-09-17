@@ -1,13 +1,16 @@
-import Database from "better-sqlite3";
+import { DatabaseSync } from "node:sqlite";
 import fs from "node:fs";
 import path from "node:path";
 
 const dataDir = path.join(process.cwd(), "data");
 if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
 
-export const db = new Database(path.join(dataDir, "commissioning.db"));
-db.pragma("journal_mode = WAL");
-db.pragma("foreign_keys = ON");
+// node:sqlite (built into Node 22.5+, no native compilation needed) instead
+// of better-sqlite3 — avoids the node-gyp/prebuild-install toolchain that
+// breaks behind corporate TLS-intercepting proxies.
+export const db = new DatabaseSync(path.join(dataDir, "commissioning.db"));
+db.exec("PRAGMA journal_mode = WAL");
+db.exec("PRAGMA foreign_keys = ON");
 
 db.exec(`
 CREATE TABLE IF NOT EXISTS projects (
