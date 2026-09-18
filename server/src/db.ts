@@ -2,7 +2,10 @@ import { DatabaseSync } from "node:sqlite";
 import fs from "node:fs";
 import path from "node:path";
 
-const dataDir = path.join(process.cwd(), "data");
+// COMMISSIONING_DATA_DIR lets the Electron desktop wrapper point this at
+// its per-user app-data folder (Program Files isn't writable); defaults to
+// ./data for plain `npm run dev` / `npm start` use.
+const dataDir = process.env.COMMISSIONING_DATA_DIR || path.join(process.cwd(), "data");
 if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
 
 // node:sqlite (built into Node 22.5+, no native compilation needed) instead

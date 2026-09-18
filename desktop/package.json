@@ -1,0 +1,44 @@
+{
+  "name": "desktop",
+  "version": "1.0.0",
+  "description": "Commissioning Points, packaged as a Windows desktop app",
+  "private": true,
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win"
+  },
+  "devDependencies": {
+    "electron": "^44.4.3",
+    "electron-builder": "^26.15.3"
+  },
+  "dependencies": {
+    "cors": "^2.8.6",
+    "express": "^4.22.3"
+  },
+  "build": {
+    "appId": "com.commissioningpoints.desktop",
+    "productName": "Commissioning Points",
+    "asar": false,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.js",
+      "package.json",
+      { "from": "../server/dist", "to": "server/dist" },
+      { "from": "../server/package.json", "to": "server/package.json" },
+      { "from": "../web/dist", "to": "web/dist" }
+    ],
+    "win": {
+      "target": [
+        { "target": "nsis", "arch": ["x64"] },
+        { "target": "portable", "arch": ["x64"] }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}

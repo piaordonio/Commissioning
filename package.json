@@ -8,8 +8,9 @@
   ],
   "scripts": {
     "dev": "concurrently -n server,web -c blue,green \"npm run dev -w server\" \"npm run dev -w web\"",
-    "build": "npm run build -w web",
-    "start": "npm run start -w server"
+    "build": "npm run build -w server && npm run build -w web",
+    "start": "npm run start -w server",
+    "dist:desktop": "npm run build && npm install --prefix desktop && npm run dist --prefix desktop"
   },
   "devDependencies": {
     "concurrently": "^9.1.0"

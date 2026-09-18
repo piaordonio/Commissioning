@@ -67,9 +67,52 @@ experimental feature" warning on startup is expected and harmless.
 ```
 npm install
 npm run dev     # server on :4001, web on :5174 (proxies /api to the server)
-npm run build    # builds the web app for production
-npm start        # runs the built server
+npm run build    # builds the server and the web app for production
+npm start        # runs the built server (serves the built web app too)
 ```
+
+## Desktop app (Windows .exe)
+
+`desktop/` wraps the same server + web UI in Electron, so it runs as a real
+double-clickable Windows app — its own window and icon, no browser tab, no
+terminal, no npm once it's built. It starts the Express server in-process on
+a fixed local port (`4317`), waits for it to come up, then opens a window
+pointed at it. The SQLite file lives under the OS's per-user app-data folder
+(`%APPDATA%\Commissioning Points\data\` on Windows), not next to the
+installed program, since Program Files isn't writable.
+
+**Build the installer on a Windows machine** — this has to run on Windows
+itself; electron-builder's NSIS installer step needs Wine to cross-build from
+Linux/Mac and won't complete without it:
+
+```
+npm run dist:desktop
+```
+
+That builds the server and web app, installs `desktop`'s own dependencies
+(it's deliberately *not* an npm workspace member — Electron and its bundled
+Chromium/Node runtime shouldn't be part of the same dependency graph as the
+plain web app), and runs `electron-builder` to produce both a `Setup *.exe`
+installer and a portable `.exe` in `desktop/release/`. Both are large
+(~150–250MB) since they bundle Chromium + Node — that's inherent to Electron,
+not a config issue.
+
+If `npm install` inside `desktop/` hits the same
+`unable to get local issuer certificate` error the main install did,
+apply the same `NODE_EXTRA_CA_CERTS` fix — Electron's own install step
+downloads a large binary over HTTPS and hits the same corporate-proxy
+TLS interception.
+
+*(Verified in this dev environment: `electron-builder --win --dir` — the
+unpacked win32 build, without the NSIS wrapper — completes correctly and
+produces a working `Commissioning Points.exe` with the right internal
+layout. That exact same code was launched and exercised end-to-end on the
+Linux equivalent build: server starts, the real UI is served, a project
+round-trips through the API, and the database file lands in the OS's
+user-data folder as expected. What's *not* verified from this environment
+is the Windows binary itself actually running on Windows, or the final NSIS
+installer — both require Wine or a real Windows machine to test to
+completion.)*
 
 ## Known gaps
 

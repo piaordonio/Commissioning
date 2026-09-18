@@ -1,6 +1,7 @@
 node_modules/
 dist/
 server/data/
+desktop/release/
 *.log
 *.tsbuildinfo
 .DS_Store
