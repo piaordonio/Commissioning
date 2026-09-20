@@ -114,6 +114,43 @@ is the Windows binary itself actually running on Windows, or the final NSIS
 installer — both require Wine or a real Windows machine to test to
 completion.)*
 
+### Auto-update
+
+The app checks GitHub Releases on this repo on every launch (and via
+Help → Check for Updates…), downloads a newer version in the background if
+one exists, and installs it on restart (or automatically the next time the
+app is closed, if you never click "Restart Now"). This only works against a
+**public** repo — checking a private repo's releases needs a token, and
+that token would have to be embedded in every installed copy of the app for
+it to check on its own, which isn't something to ship. **Make the repo
+public under Settings → Danger Zone → Change visibility before cutting the
+first release** — nothing else in this setup does that for you, and until
+then, update checks will just fail quietly (logged, not shown to the user)
+with no releases to find anyway.
+
+To cut a release once the repo is public:
+
+```
+export GH_TOKEN=<a GitHub token with contents:write on this repo>
+npm run build
+npm install --prefix desktop
+npm run release --prefix desktop
+```
+
+That builds a new version, uploads the installer + portable `.exe` + update
+metadata to a new GitHub Release matching the version in `desktop/package.json`
+(bump it first), and every already-installed copy of the app picks it up on
+its next launch. `GH_TOKEN` is only needed on the machine cutting the
+release — it's never bundled into the shipped app.
+
+*(Verified in this environment: the packaged app doesn't crash when the
+update check has nothing to find — launched under Xvfb with the publish
+config pointed at the not-yet-public repo, the server and UI kept working
+normally and the failed check was only logged, never surfaced to the user.
+What's not verified: an actual successful check-download-install cycle
+against a real published release, since that requires the repo to be
+public and a release to exist — neither is true yet.)*
+
 ## Known gaps
 
 - **Import path is logic-tested, not tested against a real `.mdb`.** The

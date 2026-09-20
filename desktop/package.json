@@ -4,9 +4,14 @@
   "description": "Commissioning Points, packaged as a Windows desktop app",
   "private": true,
   "main": "main.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/piaordonio/Commissioning.git"
+  },
   "scripts": {
     "start": "electron .",
-    "dist": "electron-builder --win"
+    "dist": "electron-builder --win",
+    "release": "electron-builder --win --publish always"
   },
   "devDependencies": {
     "electron": "^44.4.3",
@@ -14,6 +19,7 @@
   },
   "dependencies": {
     "cors": "^2.8.6",
+    "electron-updater": "^6.8.9",
     "express": "^4.22.3"
   },
   "build": {
@@ -23,17 +29,37 @@
     "directories": {
       "output": "release"
     },
+    "publish": {
+      "provider": "github",
+      "owner": "piaordonio",
+      "repo": "Commissioning"
+    },
     "files": [
       "main.js",
       "package.json",
-      { "from": "../server/dist", "to": "server/dist" },
-      { "from": "../server/package.json", "to": "server/package.json" },
-      { "from": "../web/dist", "to": "web/dist" }
+      {
+        "from": "../server/dist",
+        "to": "server/dist"
+      },
+      {
+        "from": "../web/dist",
+        "to": "web/dist"
+      }
     ],
     "win": {
       "target": [
-        { "target": "nsis", "arch": ["x64"] },
-        { "target": "portable", "arch": ["x64"] }
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
       ]
     },
     "nsis": {
