@@ -29,7 +29,7 @@ export default function App() {
     }
     const [eq, pts] = await Promise.all([
       api.list<Equipment>("equipment", { project_id: id }),
-      api.list<Point>("points", { project_id: id }),
+      api.listPoints<Point>(id),
     ]);
     setEquipment(eq);
     setPoints(pts);

@@ -1,44 +1,81 @@
-const BASE = "/api";
+import { supabase } from "./supabaseClient";
+import { ImportEquipmentDraft, ImportPointDraft } from "./mdbImport";
 
-async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
-    headers: { "Content-Type": "application/json" },
-    ...options,
-  });
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`${options?.method ?? "GET"} ${path} failed: ${res.status} ${body}`);
-  }
-  if (res.status === 204) return undefined as T;
-  return res.json() as Promise<T>;
+function assertNoError<T>(data: T | null, error: { message: string } | null): T {
+  if (error) throw new Error(error.message);
+  return data as T;
 }
 
 export const api = {
-  list: <T>(resource: string, params?: Record<string, string>) => {
-    const qs = params ? `?${new URLSearchParams(params).toString()}` : "";
-    return request<T[]>(`/${resource}${qs}`);
+  list: async <T>(table: "projects" | "equipment", params?: Record<string, string>): Promise<T[]> => {
+    let query = supabase.from(table).select("*");
+    if (params) {
+      for (const [key, value] of Object.entries(params)) query = query.eq(key, value);
+    }
+    // Matches the old server's ORDER BY: newest project first (App.tsx relies on
+    // this to find a just-created project after an import), equipment by tag.
+    query = table === "projects" ? query.order("created_at", { ascending: false }) : query.order("tag");
+    const { data, error } = await query;
+    return assertNoError(data as T[] | null, error);
   },
-  create: <T>(resource: string, data: Partial<T>) =>
-    request<T>(`/${resource}`, { method: "POST", body: JSON.stringify(data) }),
-  update: <T>(resource: string, id: string, data: Partial<T>) =>
-    request<T>(`/${resource}/${id}`, { method: "PUT", body: JSON.stringify(data) }),
-  remove: (resource: string, id: string) => request<void>(`/${resource}/${id}`, { method: "DELETE" }),
-  bulkSetPoints: (updates: { id: string; field: string; value: string }[]) =>
-    request<void>("/points/bulk", { method: "POST", body: JSON.stringify({ updates }) }),
-  import: (
-    project_id: string,
-    equipment: { tempId: string; tag: string; equipment_type: string; location?: string }[],
-    points: {
-      equipmentTempId: string;
-      panel?: string;
-      ip_op?: string;
-      analog_digital?: string;
-      point_number: string;
-      descriptor?: string;
-    }[]
-  ) =>
-    request<{ equipment_count: number; point_count: number }>("/import", {
-      method: "POST",
-      body: JSON.stringify({ project_id, equipment, points }),
-    }),
+
+  // points don't carry project_id directly (only equipment_id) — mirrors the
+  // JOIN the old Express route did, as two round trips instead of one.
+  listPoints: async <T>(projectId: string): Promise<T[]> => {
+    const { data: equipmentRows, error: equipmentError } = await supabase
+      .from("equipment")
+      .select("id")
+      .eq("project_id", projectId);
+    assertNoError(equipmentRows, equipmentError);
+    const equipmentIds = (equipmentRows ?? []).map((e: { id: string }) => e.id);
+    if (equipmentIds.length === 0) return [];
+
+    const { data, error } = await supabase
+      .from("points")
+      .select("*")
+      .in("equipment_id", equipmentIds)
+      .order("point_number");
+    return assertNoError(data as T[] | null, error);
+  },
+
+  // `as any`: this client isn't wired to Supabase's generated Database types
+  // (no schema codegen step for a project this size), so .insert()/.update()
+  // have nothing to structurally check Partial<T> against.
+  create: async <T>(table: "projects" | "equipment", data: Partial<T>): Promise<T> => {
+    const { data: row, error } = await supabase.from(table).insert(data as any).select().single();
+    return assertNoError(row as T | null, error);
+  },
+
+  update: async <T>(table: "projects" | "equipment" | "points", id: string, data: Partial<T>): Promise<T> => {
+    const { data: row, error } = await supabase.from(table).update(data as any).eq("id", id).select().single();
+    return assertNoError(row as T | null, error);
+  },
+
+  remove: async (table: "projects" | "equipment", id: string): Promise<void> => {
+    const { error } = await supabase.from(table).delete().eq("id", id);
+    if (error) throw new Error(error.message);
+  },
+
+  // Applied as one Postgres transaction server-side (see bulk_set_points in
+  // supabase/schema.sql) so a range-fill or paste can't land half-applied.
+  bulkSetPoints: async (updates: { id: string; field: string; value: string }[]): Promise<void> => {
+    const { error } = await supabase.rpc("bulk_set_points", { p_updates: updates });
+    if (error) throw new Error(error.message);
+  },
+
+  // Also one transaction server-side (import_points in supabase/schema.sql):
+  // either every equipment/point row from the parsed Access file lands, or
+  // none do.
+  import: async (
+    projectId: string,
+    equipment: ImportEquipmentDraft[],
+    points: ImportPointDraft[]
+  ): Promise<{ equipment_count: number; point_count: number }> => {
+    const { data, error } = await supabase.rpc("import_points", {
+      p_project_id: projectId,
+      p_equipment: equipment,
+      p_points: points,
+    });
+    return assertNoError(data as { equipment_count: number; point_count: number } | null, error);
+  },
 };
