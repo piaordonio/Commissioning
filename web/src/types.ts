@@ -29,6 +29,10 @@ export interface Equipment {
   location: string;
   notes: string;
   blocked_by: string;
+  // false = not present in the most recent import (removed/renamed at the
+  // source) — never hard-deleted by re-import. See import_points() in
+  // supabase/schema.sql.
+  active: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -43,6 +47,7 @@ export type Point = {
   descriptor: string;
   notes: string;
   blocked_by: string;
+  active: boolean;
   created_at: string;
   updated_at: string;
 } & Record<CheckField, CheckState>;

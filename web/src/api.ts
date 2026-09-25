@@ -64,18 +64,51 @@ export const api = {
   },
 
   // Also one transaction server-side (import_points in supabase/schema.sql):
-  // either every equipment/point row from the parsed Access file lands, or
-  // none do.
+  // either every equipment/point row from the parsed import lands, or none
+  // do. Non-destructive: matches existing equipment (by tag) and points (by
+  // point_number) rather than always inserting, so re-importing an updated
+  // points list updates/adds/deactivates instead of duplicating or erasing
+  // checklist progress. See ImportDiff below for what the counts mean.
   import: async (
     projectId: string,
     equipment: ImportEquipmentDraft[],
     points: ImportPointDraft[]
-  ): Promise<{ equipment_count: number; point_count: number }> => {
+  ): Promise<ImportDiff> => {
     const { data, error } = await supabase.rpc("import_points", {
       p_project_id: projectId,
       p_equipment: equipment,
       p_points: points,
     });
-    return assertNoError(data as { equipment_count: number; point_count: number } | null, error);
+    return assertNoError(data as ImportDiff | null, error);
+  },
+
+  // Reconciliation: the user recognized that a deactivated point and a
+  // newly-added point from the same import are actually the same physical
+  // point, renumbered. See pair_reimported_point in supabase/schema.sql —
+  // transfers checklist state onto the new point and removes the old row.
+  pairReimportedPoint: async (oldPointId: string, newPointId: string): Promise<void> => {
+    const { error } = await supabase.rpc("pair_reimported_point", {
+      p_old_point_id: oldPointId,
+      p_new_point_id: newPointId,
+    });
+    if (error) throw new Error(error.message);
   },
 };
+
+export interface ImportDiffPoint {
+  id: string;
+  point_number: string;
+  descriptor: string;
+  equipment_tag: string;
+}
+
+export interface ImportDiff {
+  equipment_new: number;
+  equipment_matched: number;
+  equipment_deactivated: number;
+  point_new: number;
+  point_matched: number;
+  point_deactivated: number;
+  new_points: ImportDiffPoint[];
+  deactivated_points: ImportDiffPoint[];
+}

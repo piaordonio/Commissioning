@@ -1,7 +1,8 @@
 import { useRef, useState } from "react";
-import { api } from "../api";
+import { api, ImportDiff } from "../api";
 import { parseAccessFile, ImportResult } from "../mdbImport";
 import { Project } from "../types";
+import { ImportReconciliation } from "./ImportReconciliation";
 
 const NEW_PROJECT = "__new__";
 
@@ -23,6 +24,7 @@ export function ImportMdbModal({
   const [newProjectNumber, setNewProjectNumber] = useState("");
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [diff, setDiff] = useState<ImportDiff | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
   const handleFile = async (file: File) => {
@@ -65,8 +67,16 @@ export function ImportMdbModal({
         });
         targetProjectId = project.id;
       }
-      await api.import(targetProjectId, parsed.equipment, parsed.points);
-      await onImported();
+      const result = await api.import(targetProjectId, parsed.equipment, parsed.points);
+      // A pure first-time import or a reimport that only added points has
+      // nothing to reconcile — skip straight to closing. Only pause for
+      // review when something actually went inactive, since that's the
+      // case a renumbered (not truly removed) point could be hiding in.
+      if (result.deactivated_points.length > 0) {
+        setDiff(result);
+      } else {
+        await onImported();
+      }
     } catch (err: any) {
       setError(err.message ?? "Import failed");
     } finally {
@@ -76,6 +86,10 @@ export function ImportMdbModal({
 
   const zoneCount = parsed?.equipment.filter((e) => e.equipment_type === "zone").length ?? 0;
   const panelCount = parsed?.equipment.filter((e) => e.equipment_type === "cp_panel").length ?? 0;
+
+  if (diff) {
+    return <ImportReconciliation diff={diff} onDone={onImported} />;
+  }
 
   return (
     <div className="form">

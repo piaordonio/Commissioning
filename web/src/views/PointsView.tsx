@@ -33,18 +33,27 @@ export function PointsView({
   const clipboardRef = useRef<CheckState[][] | null>(null);
   const [anchor, setAnchor] = useState<Cell | null>(null);
   const [focus, setFocus] = useState<Cell | null>(null);
+  const [showRemoved, setShowRemoved] = useState(false);
 
   const equipmentById = useMemo(() => Object.fromEntries(equipment.map((e) => [e.id, e])), [equipment]);
-  const progressByEquipment = useMemo(() => buildProgressByEquipment(points), [points]);
+
+  const activePoints = useMemo(() => points.filter((p) => p.active), [points]);
+  const removedCount = points.length - activePoints.length;
+  // Progress reflects the current design regardless of the toggle below —
+  // a removed point shouldn't count toward (or against) completion just
+  // because it's temporarily visible for review.
+  const progressByEquipment = useMemo(() => buildProgressByEquipment(activePoints), [activePoints]);
+
+  const visiblePoints = showRemoved ? points : activePoints;
 
   const rows = useMemo(
     () =>
-      [...points].sort((a, b) => {
+      [...visiblePoints].sort((a, b) => {
         const ta = equipmentById[a.equipment_id]?.tag ?? "";
         const tb = equipmentById[b.equipment_id]?.tag ?? "";
         return ta === tb ? a.point_number.localeCompare(b.point_number) : ta.localeCompare(tb);
       }),
-    [points, equipmentById]
+    [visiblePoints, equipmentById]
   );
 
   const rowIndexById = useMemo(() => {
@@ -211,9 +220,16 @@ export function PointsView({
     <div className="view">
       <div className="toolbar">
         <span className="toolbar-label">
-          {rows.length} point{rows.length === 1 ? "" : "s"} across {groups.length} equipment
+          {activePoints.length} point{activePoints.length === 1 ? "" : "s"} across{" "}
+          {new Set(activePoints.map((p) => p.equipment_id)).size} equipment
         </span>
         <div className="spacer" />
+        {removedCount > 0 && (
+          <label className="toolbar-label" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <input type="checkbox" checked={showRemoved} onChange={(e) => setShowRemoved(e.target.checked)} />
+            Show {removedCount} removed point{removedCount === 1 ? "" : "s"}
+          </label>
+        )}
       </div>
       <div className="toolbar">
         <span className="muted-text">
@@ -260,8 +276,11 @@ export function PointsView({
                     {g.items.map((point) => {
                       const r = rowIndexById.get(point.id)!;
                       return (
-                        <tr key={point.id}>
-                          <td className="mono checklist-sticky-col">{point.point_number}</td>
+                        <tr key={point.id} style={point.active ? undefined : { opacity: 0.55 }}>
+                          <td className="mono checklist-sticky-col">
+                            {point.point_number}
+                            {!point.active && <span className="muted-text"> (removed)</span>}
+                          </td>
                           <td>{point.panel}</td>
                           <td>{point.ip_op}</td>
                           <td>{point.analog_digital}</td>

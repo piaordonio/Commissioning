@@ -214,6 +214,13 @@ textarea {
   font-weight: 600;
 }
 
+.clickable-row {
+  cursor: pointer;
+}
+.clickable-row:hover {
+  background: #f8fafc;
+}
+
 .truncate {
   max-width: 320px;
   overflow: hidden;

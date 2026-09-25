@@ -46,6 +46,42 @@ The file itself is parsed entirely client-side — nothing is uploaded except
 the resulting point list, which goes straight to Supabase via
 `import_points()` (see below).
 
+## Re-importing without losing progress
+
+The design points list isn't frozen — points get added, removed, or
+renumbered between design and commissioning, and even during CX itself.
+Re-importing an updated `.mdb` is **non-destructive**: `import_points()`
+matches equipment by `tag` and points by `point_number` against what's
+already in the project, rather than always inserting.
+
+- A **matched** point (same point_number as before) gets its
+  descriptor/panel/IP-OP/A-D updated from the new import, but the 7
+  checklist fields, Notes, and Blocked By are **never touched** — progress
+  survives.
+- A **new** point (wasn't there before) is inserted as usual, blank
+  checklist.
+- A point **missing** from the new import (removed at the source) is marked
+  `active = false`, not deleted — its progress is preserved in case the
+  removal was a mistake, or the point was actually renumbered rather than
+  truly removed. The grid hides inactive points by default; a "Show N
+  removed points" toggle in the toolbar reveals them (shown dimmed, tagged
+  "(removed)"), for manual review/cleanup.
+- Equipment gets the same treatment — a whole zone renamed or removed goes
+  inactive along with its points, rather than silently losing everything
+  under it.
+
+**Renumbering** (a point's number changed, not truly removed) looks
+identical to "removed + unrelated new point added" from the matching logic
+alone — there's no way to tell those apart automatically without risking a
+wrong guess that silently loses progress. Instead, whenever a re-import
+removes at least one point, a reconciliation screen (`web/src/components/
+ImportReconciliation.tsx`) shows the just-removed and just-added points
+side by side; clicking a removed one then its replacement calls
+`pair_reimported_point()`, which transfers the checklist state onto the new
+point_number and removes the now-redundant old row. Skippable — closing the
+screen without pairing anything is exactly the "point was actually removed"
+case, already handled correctly by default.
+
 ## Stack
 
 Vite + React + TypeScript, talking directly to [Supabase](https://supabase.com)
@@ -87,18 +123,28 @@ the client bundle regardless (it's public by design in Supabase's model).
 If this tool grows real user accounts, tightening these policies (e.g.
 scoping by project membership) is the first thing to do before that matters.
 
-### Why two operations are Postgres functions, not plain inserts
+### Why three operations are Postgres functions, not plain inserts/updates
 
-`import_points()` and `bulk_set_points()` (both in `supabase/schema.sql`)
-exist so an Access import or a checklist range-fill/paste is all-or-nothing
-— a Postgres function runs inside one transaction, so a failure partway
-through rolls back everything instead of leaving half the points imported
-or half a paste applied.
+`import_points()`, `bulk_set_points()`, and `pair_reimported_point()` (all
+in `supabase/schema.sql`) exist so an import, a checklist range-fill/paste,
+or a renumber-pairing is all-or-nothing — a Postgres function runs inside
+one transaction, so a failure partway through rolls back everything instead
+of leaving an import half-applied.
 
-*(These two RPCs, and the schema generally, are logic-reviewed but not
-exercised against a real Supabase project from this environment — no
-Supabase project was available here to test against. Run `supabase/schema.sql`
-against a real project and try an import before relying on it for a real job.)*
+*(Verified against a real local PostgreSQL 16 instance from this
+environment — not a live Supabase project, since none was available here,
+but the same Postgres engine Supabase runs on. Ran the full schema, then
+exercised realistic scenarios directly: a first import, a re-import with a
+point added/removed/renamed confirming matched points keep their checklist
+state and removed points go inactive rather than deleted, a whole equipment
+group disappearing, and a renumber pairing transferring progress and
+removing the old row. All behaved exactly as designed. What's NOT verified:
+the Supabase-specific pieces that only exist on their platform, not plain
+Postgres — the RLS policies' actual behavior under the `anon` role (that
+role doesn't exist on a local install, so the grants targeting it were
+skipped in this testing) and the Supabase-generated REST API surface
+`supabase-js` talks to. Try a real import against your own Supabase project
+before relying on this for a live job.)*
 
 ## Known gaps
 
@@ -116,7 +162,12 @@ against a real project and try an import before relying on it for a real job.)*
 - Analog/Digital isn't populated for zone-expanded points (the "Zone type
   points list T" table doesn't carry that column) — only direct CP-panel
   points have it.
-- **The two Supabase RPC functions are untested against a live database**
-  (see above) — the build compiles and the client-side error handling was
-  verified against a simulated network failure, but the actual
-  import/bulk-update SQL has not run against a real Postgres instance.
+- **Not tested against a live Supabase project** (see the RPC section
+  above) — the schema and all three functions are verified against real
+  PostgreSQL, but Supabase's own layer on top (RLS under the actual `anon`
+  role, the generated REST API `supabase-js` calls) hasn't been exercised.
+- **The reconciliation UI's pairing interaction is verified in isolation**
+  (a standalone harness with mocked data, confirming the click-to-pair flow
+  calls `pair_reimported_point()` with the right IDs and updates correctly),
+  not as part of a full real import → reconciliation → confirm flow against
+  a live project.
