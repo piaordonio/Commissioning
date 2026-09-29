@@ -51,7 +51,7 @@ export const api = {
     return assertNoError(row as T | null, error);
   },
 
-  remove: async (table: "projects" | "equipment", id: string): Promise<void> => {
+  remove: async (table: "projects" | "equipment" | "points", id: string): Promise<void> => {
     const { error } = await supabase.from(table).delete().eq("id", id);
     if (error) throw new Error(error.message);
   },

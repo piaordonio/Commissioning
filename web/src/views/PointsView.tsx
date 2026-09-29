@@ -23,12 +23,14 @@ export function PointsView({
   onSetValue,
   onBulkSetValues,
   onUpdatePoint,
+  onDeletePoint,
 }: {
   points: Point[];
   equipment: Equipment[];
   onSetValue: (pointId: string, field: CheckField, value: CheckState) => void;
   onBulkSetValues: (updates: { id: string; field: string; value: string }[]) => void;
   onUpdatePoint: (point: Point, patch: Partial<Point>) => void;
+  onDeletePoint: (point: Point) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const clipboardRef = useRef<CheckState[][] | null>(null);
@@ -263,6 +265,7 @@ export function PointsView({
                 ))}
                 <th>Notes</th>
                 <th>Blocked By</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
@@ -272,7 +275,7 @@ export function PointsView({
                 return (
                   <Fragment key={g.equipmentId}>
                     <tr className="table-group-header">
-                      <td colSpan={3 + CHECK_FIELDS.length + 2}>
+                      <td colSpan={3 + CHECK_FIELDS.length + 3}>
                         {eq?.tag ?? g.equipmentId}
                         {eq?.location ? ` — ${eq.location}` : ""}{" "}
                         <span className="count-pill">{g.items.length}</span>{" "}
@@ -329,6 +332,17 @@ export function PointsView({
                                 if (e.target.value !== point.blocked_by) onUpdatePoint(point, { blocked_by: e.target.value });
                               }}
                             />
+                          </td>
+                          <td>
+                            <button
+                              type="button"
+                              className="icon-btn"
+                              title="Delete point"
+                              aria-label="Delete point"
+                              onClick={() => onDeletePoint(point)}
+                            >
+                              🗑
+                            </button>
                           </td>
                         </tr>
                       );

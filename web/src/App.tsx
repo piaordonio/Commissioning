@@ -5,6 +5,7 @@ import { ImportMdbModal } from "./components/ImportMdbModal";
 import { VerifyControllerModal } from "./components/VerifyControllerModal";
 import { PointsView } from "./views/PointsView";
 import { averageProgress } from "./progress";
+import { resolvedPointNumber } from "./pointNumber";
 import { CheckField, CheckState, Equipment, Point, Project } from "./types";
 
 export default function App() {
@@ -88,6 +89,18 @@ export default function App() {
     api.update<Point>("points", point.id, patch).catch(() => refreshAll());
   };
 
+  const deletePoint = async (point: Point) => {
+    const label = `${resolvedPointNumber(point)}${point.descriptor ? ` — ${point.descriptor}` : ""}`;
+    if (!window.confirm(`Delete point ${label}? This cannot be undone.`)) return;
+    setPoints((list) => list.filter((p) => p.id !== point.id));
+    try {
+      await api.remove("points", point.id);
+    } catch (err: any) {
+      setError(err.message ?? "Failed to delete point");
+      refreshAll();
+    }
+  };
+
   const overallPct = useMemo(() => Math.round(averageProgress(points) * 100), [points]);
   const currentProject = projects.find((p) => p.id === projectId);
 
@@ -146,6 +159,7 @@ export default function App() {
           onSetValue={setPointValue}
           onBulkSetValues={bulkSetPoints}
           onUpdatePoint={updatePoint}
+          onDeletePoint={deletePoint}
         />
       </div>
 
