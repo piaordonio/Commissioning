@@ -1,5 +1,5 @@
 import { Fragment, useMemo, useRef, useState } from "react";
-import { CHECK_FIELDS, CHECK_FIELD_LABELS, CheckField, CheckState, Equipment, Point } from "../types";
+import { CHECK_FIELDS, CHECK_FIELD_LABELS, CheckField, CheckState, Equipment, Point, POINT_STATUS_LABELS } from "../types";
 import { buildProgressByEquipment } from "../progress";
 import { resolvedPointNumber, displayPanel } from "../pointNumber";
 import { autoFitColumnWidth } from "../textWidth";
@@ -51,6 +51,11 @@ export function PointsView({
   const removedCount = points.length - activePoints.length;
   const checkedPoints = useMemo(() => activePoints.filter((p) => p.on_controller !== null), [activePoints]);
   const onControllerCount = useMemo(() => checkedPoints.filter((p) => p.on_controller).length, [checkedPoints]);
+  const statusCounts = useMemo(() => {
+    const counts = { not_started: 0, in_progress: 0, commissioned: 0 };
+    for (const p of activePoints) counts[p.status]++;
+    return counts;
+  }, [activePoints]);
   // Progress reflects the current design regardless of the toggle below —
   // a removed point shouldn't count toward (or against) completion just
   // because it's temporarily visible for review.
@@ -285,6 +290,10 @@ export function PointsView({
             {onControllerCount} of {checkedPoints.length} confirmed on controller
           </span>
         )}
+        <span className="toolbar-label">
+          {statusCounts.commissioned} Commissioned, {statusCounts.in_progress} In Progress,{" "}
+          {statusCounts.not_started} Not Started
+        </span>
         <div className="spacer" />
         {removedCount > 0 && (
           <label className="toolbar-label" style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -340,6 +349,8 @@ export function PointsView({
                     {CHECK_FIELD_LABELS[f]}
                   </th>
                 ))}
+                <th>Status</th>
+                <th>Date Commissioned</th>
                 <th style={{ width: notesColWidth }}>Notes</th>
                 <th>Blocked By</th>
                 <th>Controller</th>
@@ -353,7 +364,7 @@ export function PointsView({
                 return (
                   <Fragment key={g.equipmentId}>
                     <tr className="table-group-header">
-                      <td colSpan={3 + CHECK_FIELDS.length + 4}>
+                      <td colSpan={3 + CHECK_FIELDS.length + 6}>
                         {eq?.tag ?? g.equipmentId}
                         {eq?.location ? ` — ${eq.location}` : ""}{" "}
                         <span className="count-pill">{g.items.length}</span>{" "}
@@ -384,6 +395,12 @@ export function PointsView({
                               </td>
                             );
                           })}
+                          <td>
+                            <span className={`status-pill status-${point.status}`}>
+                              {POINT_STATUS_LABELS[point.status]}
+                            </span>
+                          </td>
+                          <td>{point.date_commissioned ?? ""}</td>
                           <td className="checklist-text-col checklist-notes-col">
                             <input
                               key={`${point.id}-notes`}

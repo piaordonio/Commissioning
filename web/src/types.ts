@@ -1,6 +1,15 @@
 export type CheckState = "" | "check" | "x" | "na";
 
-export const CHECK_FIELDS = ["wired", "tagged", "end_to_end", "calibrate", "sequence", "alarm", "graphics"] as const;
+export const CHECK_FIELDS = [
+  "wired",
+  "tagged",
+  "end_to_end",
+  "calibrate",
+  "function_test",
+  "sequence",
+  "alarm",
+  "graphics",
+] as const;
 export type CheckField = (typeof CHECK_FIELDS)[number];
 
 export const CHECK_FIELD_LABELS: Record<CheckField, string> = {
@@ -8,9 +17,18 @@ export const CHECK_FIELD_LABELS: Record<CheckField, string> = {
   tagged: "Tagged",
   end_to_end: "End-to-End",
   calibrate: "Calibrate",
+  function_test: "Function Test",
   sequence: "Sequence",
   alarm: "Alarm",
   graphics: "Graphics",
+};
+
+export type PointStatus = "not_started" | "in_progress" | "commissioned";
+
+export const POINT_STATUS_LABELS: Record<PointStatus, string> = {
+  not_started: "Not Started",
+  in_progress: "In Progress",
+  commissioned: "Commissioned",
 };
 
 export interface Project {
@@ -54,6 +72,10 @@ export type Point = {
   // true only for a point created via "Add as New Point" -- provenance,
   // never recomputed by a later check or re-import.
   added_from_controller: boolean;
+  // Maintained entirely by set_point_status_and_date() in
+  // supabase/schema.sql -- never written directly by the app.
+  status: PointStatus;
+  date_commissioned: string | null;
   created_at: string;
   updated_at: string;
 } & Record<CheckField, CheckState>;

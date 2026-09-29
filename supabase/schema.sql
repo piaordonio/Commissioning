@@ -42,6 +42,7 @@ create table if not exists points (
   tagged text not null default '' check (tagged in ('', 'check', 'x', 'na')),
   end_to_end text not null default '' check (end_to_end in ('', 'check', 'x', 'na')),
   calibrate text not null default '' check (calibrate in ('', 'check', 'x', 'na')),
+  function_test text not null default '' check (function_test in ('', 'check', 'x', 'na')),
   sequence text not null default '' check (sequence in ('', 'check', 'x', 'na')),
   alarm text not null default '' check (alarm in ('', 'check', 'x', 'na')),
   graphics text not null default '' check (graphics in ('', 'check', 'x', 'na')),
@@ -71,6 +72,15 @@ alter table points add column if not exists on_controller boolean;
 -- never recomputed by set_controller_status() or a later re-import.
 alter table points add column if not exists added_from_controller boolean not null default false;
 
+-- Idempotent for anyone who already ran an earlier version of this file
+-- before the Function Test checklist field existed.
+alter table points add column if not exists function_test text not null default '' check (function_test in ('', 'check', 'x', 'na'));
+
+-- status/date_commissioned are maintained entirely by
+-- set_point_status_and_date() below, never written directly by the app.
+alter table points add column if not exists status text not null default 'not_started' check (status in ('not_started', 'in_progress', 'commissioned'));
+alter table points add column if not exists date_commissioned date;
+
 create index if not exists idx_equipment_project on equipment(project_id);
 create index if not exists idx_points_equipment on points(equipment_id);
 
@@ -97,6 +107,64 @@ create trigger trg_equipment_updated_at before update on equipment
 drop trigger if exists trg_points_updated_at on points;
 create trigger trg_points_updated_at before update on points
   for each row execute function set_updated_at();
+
+-- ---- Keep status/date_commissioned in sync with the 8 checklist fields,
+-- regardless of which code path touched them (a single cell edit, a
+-- bulk-fill range, a re-import match, or a renumber pairing) ----
+-- An N/A field counts as satisfied, matching pointProgress() in
+-- web/src/progress.ts: N/A is excluded from the denominator there too,
+-- so a point with everything applicable checked (N/A's aside) already
+-- reads as fully complete elsewhere in this app -- Commissioned agrees
+-- with that instead of introducing a stricter, inconsistent definition.
+-- All 8 fields N/A is the same "vacuously complete" edge case
+-- pointProgress() already treats as 100%, so it reads as Commissioned
+-- here too. date_commissioned is set only on the transition into
+-- Commissioned (never overwritten while already Commissioned, so it
+-- doesn't reset on an unrelated edit) and cleared the moment the point
+-- is no longer Commissioned -- it always reflects current status, not a
+-- permanent first-achieved record.
+create or replace function set_point_status_and_date()
+returns trigger
+language plpgsql
+as $$
+declare
+  v_checked int;
+  v_na int;
+begin
+  v_checked := (case when new.wired = 'check' then 1 else 0 end)
+             + (case when new.tagged = 'check' then 1 else 0 end)
+             + (case when new.end_to_end = 'check' then 1 else 0 end)
+             + (case when new.calibrate = 'check' then 1 else 0 end)
+             + (case when new.function_test = 'check' then 1 else 0 end)
+             + (case when new.sequence = 'check' then 1 else 0 end)
+             + (case when new.alarm = 'check' then 1 else 0 end)
+             + (case when new.graphics = 'check' then 1 else 0 end);
+  v_na := (case when new.wired = 'na' then 1 else 0 end)
+        + (case when new.tagged = 'na' then 1 else 0 end)
+        + (case when new.end_to_end = 'na' then 1 else 0 end)
+        + (case when new.calibrate = 'na' then 1 else 0 end)
+        + (case when new.function_test = 'na' then 1 else 0 end)
+        + (case when new.sequence = 'na' then 1 else 0 end)
+        + (case when new.alarm = 'na' then 1 else 0 end)
+        + (case when new.graphics = 'na' then 1 else 0 end);
+
+  if v_checked = 8 - v_na then
+    new.status := 'commissioned';
+    if new.date_commissioned is null then
+      new.date_commissioned := current_date;
+    end if;
+  else
+    new.status := case when v_checked = 0 then 'not_started' else 'in_progress' end;
+    new.date_commissioned := null;
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_points_status_and_date on points;
+create trigger trg_points_status_and_date before insert or update on points
+  for each row execute function set_point_status_and_date();
 
 -- ---- RPCs for the two operations that need to be all-or-nothing ----
 -- (a Postgres function runs inside the calling transaction, so either of
@@ -283,6 +351,7 @@ begin
         tagged = old_pt.tagged,
         end_to_end = old_pt.end_to_end,
         calibrate = old_pt.calibrate,
+        function_test = old_pt.function_test,
         sequence = old_pt.sequence,
         alarm = old_pt.alarm,
         graphics = old_pt.graphics,
@@ -307,7 +376,7 @@ as $$
 declare
   v_item jsonb;
   v_field text;
-  v_allowed text[] := array['wired', 'tagged', 'end_to_end', 'calibrate', 'sequence', 'alarm', 'graphics', 'notes', 'blocked_by'];
+  v_allowed text[] := array['wired', 'tagged', 'end_to_end', 'calibrate', 'function_test', 'sequence', 'alarm', 'graphics', 'notes', 'blocked_by'];
 begin
   for v_item in select * from jsonb_array_elements(p_updates) loop
     v_field := v_item->>'field';

@@ -8,12 +8,33 @@ that BMS techs currently use to track individual point checkout.
 ## What it does
 
 For every BMS point on a job — not just each piece of equipment — track the
-same 7 fields the legacy checksheet uses: **Wired, Tagged, End-to-End,
-Calibrate, Sequence, Alarm, Graphics**, plus **Notes** and **Blocked By**,
-in a click-to-cycle grid modeled on the `apps` tracker's `ChecklistView`
-(click a cell to cycle ✓ / ✗ / N/A, shift-click to select a range, Ctrl/Cmd+C
-/ V to copy-paste across cells, or type `c` / `x` / `n` / `0` to bulk-fill a
-selection).
+8 fields the legacy checksheet's 7 have grown into: **Wired, Tagged,
+End-to-End, Calibrate, Function Test, Sequence, Alarm, Graphics**, plus
+**Notes** and **Blocked By**, in a click-to-cycle grid modeled on the `apps`
+tracker's `ChecklistView` (click a cell to cycle ✓ / ✗ / N/A, shift-click to
+select a range, Ctrl/Cmd+C / V to copy-paste across cells, or type `c` / `x`
+/ `n` / `0` to bulk-fill a selection).
+
+Two more columns summarize those 8 for you, both maintained entirely by a
+Postgres trigger (`set_point_status_and_date()` in `supabase/schema.sql`) —
+never written directly by the app, so they stay correct no matter which
+code path touches a checklist field (a single click, a bulk range-fill, a
+re-import match, a renumber pairing):
+
+- **Status** — a colored pill: **Not Started** (nothing checked yet),
+  **In Progress** (at least one field checked), or **Commissioned** (every
+  non-N/A field checked — an N/A field counts as satisfied, same as it
+  already does in the progress-percent calculation, so an all-applicable-
+  checked point reads Commissioned the same way it already reads 100%
+  elsewhere in this app).
+- **Date Commissioned** — auto-fills with today's date the moment a point's
+  status becomes Commissioned, and auto-clears if it later drops back out
+  (a field gets unchecked to correct a mistake, or a re-inspection fails
+  something) — it always reflects current status, not a permanent
+  first-achieved record.
+
+Both are display-only in the grid and the printed report — no click-to-cycle,
+no input.
 
 Points are grouped under **equipment** (a CP panel's direct points, or a
 zone/VAV instance), and equipment is grouped under a **project**, so the

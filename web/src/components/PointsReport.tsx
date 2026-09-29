@@ -1,5 +1,5 @@
 import { Fragment, useMemo, useState } from "react";
-import { CHECK_FIELDS, CHECK_FIELD_LABELS, CheckState, Equipment, Point, Project } from "../types";
+import { CHECK_FIELDS, CHECK_FIELD_LABELS, CheckState, Equipment, Point, POINT_STATUS_LABELS, Project } from "../types";
 import { buildProgressByEquipment, averageProgress } from "../progress";
 import { resolvedPointNumber, displayPanel } from "../pointNumber";
 
@@ -91,6 +91,8 @@ export function PointsReport({
                   {CHECK_FIELD_LABELS[f]}
                 </th>
               ))}
+              <th className="report-col-status">Status</th>
+              <th className="report-col-date">Date Comm.</th>
               <th className="report-col-notes">Notes</th>
               <th className="report-col-blocked">Blocked By</th>
             </tr>
@@ -102,7 +104,7 @@ export function PointsReport({
               return (
                 <Fragment key={g.equipmentId}>
                   <tr className="table-group-header">
-                    <td colSpan={3 + CHECK_FIELDS.length + 2}>
+                    <td colSpan={3 + CHECK_FIELDS.length + 4}>
                       {eq?.tag ?? g.equipmentId}
                       {eq?.location ? ` — ${eq.location}` : ""} <span className="count-pill">{g.items.length}</span>{" "}
                       <span className="progress-pill">{pct}%</span>
@@ -120,6 +122,12 @@ export function PointsReport({
                           {SYMBOL[point[field]]}
                         </td>
                       ))}
+                      <td className="report-col-status">
+                        <span className={`status-pill status-${point.status}`}>
+                          {POINT_STATUS_LABELS[point.status]}
+                        </span>
+                      </td>
+                      <td className="report-col-date">{point.date_commissioned ?? ""}</td>
                       <td className="report-col-notes">{point.notes || "—"}</td>
                       <td className="report-col-blocked">{point.blocked_by || "—"}</td>
                     </tr>

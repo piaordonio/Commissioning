@@ -436,6 +436,27 @@ textarea {
   color: #166534;
 }
 
+.status-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.status-not_started {
+  background: #f1f5f9;
+  color: #64748b;
+}
+.status-in_progress {
+  background: #fef3c7;
+  color: #92400e;
+}
+.status-commissioned {
+  background: #dcfce7;
+  color: #166534;
+}
+
 /* Smaller font + tighter padding than the interactive grid: the report
    has to fit a full checklist's worth of columns on one printed page
    width (this was overflowing off the right edge in landscape before),
@@ -483,13 +504,33 @@ textarea {
   max-width: 80px;
 }
 
+.report-table th.report-col-status,
+.report-table td.report-col-status {
+  width: 74px;
+  min-width: 74px;
+  max-width: 74px;
+}
+
+.report-table th.report-col-date,
+.report-table td.report-col-date {
+  width: 56px;
+  min-width: 56px;
+  max-width: 56px;
+  white-space: nowrap;
+}
+
+.report-table .status-pill {
+  font-size: 9px;
+  padding: 2px 5px;
+}
+
 .report-table th.checklist-item-header,
 .report-table td.checklist-cell {
-  width: 38px;
-  min-width: 38px;
-  max-width: 38px;
+  width: 34px;
+  min-width: 34px;
+  max-width: 34px;
   font-size: 10px;
-  padding: 4px 2px;
+  padding: 4px 1px;
 }
 
 .report-header {
