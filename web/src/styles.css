@@ -484,7 +484,8 @@ textarea {
   background: #fef3c7;
   color: #92400e;
 }
-.status-commissioned {
+.status-commissioned,
+.status-complete {
   background: #dcfce7;
   color: #166534;
 }

@@ -105,6 +105,11 @@ create table if not exists install_checks (
   updated_at timestamptz not null default now()
 );
 
+-- Idempotent for anyone who already ran an earlier version of this file
+-- before Install had its own Notes column (separate from points.notes,
+-- which keeps meaning "commissioning-context notes").
+alter table install_checks add column if not exists notes text not null default '';
+
 create index if not exists idx_equipment_project on equipment(project_id);
 create index if not exists idx_points_equipment on points(equipment_id);
 create index if not exists idx_install_checks_point on install_checks(point_id);
@@ -437,7 +442,8 @@ begin
         panel_term = old_ic.panel_term,
         field_term = old_ic.field_term,
         tagged = old_ic.tagged,
-        end_to_end = old_ic.end_to_end
+        end_to_end = old_ic.end_to_end,
+        notes = old_ic.notes
     from install_checks as old_ic
     where new_ic.point_id = p_new_point_id
       and old_ic.point_id = p_old_point_id;
@@ -482,7 +488,7 @@ as $$
 declare
   v_item jsonb;
   v_field text;
-  v_allowed text[] := array['pipe_flex', 'pulled', 'mounted', 'panel_term', 'field_term', 'tagged', 'end_to_end'];
+  v_allowed text[] := array['pipe_flex', 'pulled', 'mounted', 'panel_term', 'field_term', 'tagged', 'end_to_end', 'notes'];
 begin
   for v_item in select * from jsonb_array_elements(p_updates) loop
     v_field := v_item->>'field';

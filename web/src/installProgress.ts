@@ -23,6 +23,36 @@ export function installProgress(check: InstallCheck | undefined): number {
   return weightSum === 0 ? 1 : creditSum / weightSum;
 }
 
+export type InstallStatus = "not_started" | "in_progress" | "complete";
+
+export const INSTALL_STATUS_LABELS: Record<InstallStatus, string> = {
+  not_started: "Not Started",
+  in_progress: "In Progress",
+  complete: "Complete",
+};
+
+// A plain bucketed read of the 7 fields, not weighted like installProgress()
+// above -- mirrors set_point_status_and_date()'s counting logic in
+// supabase/schema.sql (N/A never blocks completion, all-N/A reads as
+// complete), but computed on read rather than persisted: unlike
+// Commissioning's Status/Date Commissioned, there's no "date install
+// completed" requirement driving a need to track the transition moment
+// server-side, so this has nothing that needs a trigger or a stored column.
+export function installStatus(check: InstallCheck | undefined): InstallStatus {
+  if (!check) return "not_started";
+  let checked = 0;
+  let na = 0;
+  for (const field of INSTALL_FIELDS) {
+    if (check[field] === "check") checked++;
+    else if (check[field] === "na") na++;
+  }
+  // Checked against "complete" first: an all-N/A point has checked === 0
+  // too, and must read Complete (same vacuously-complete convention as
+  // Commissioning's all-N/A edge case), not Not Started.
+  if (checked === INSTALL_FIELDS.length - na) return "complete";
+  return checked === 0 ? "not_started" : "in_progress";
+}
+
 export function buildInstallProgressByEquipment(
   points: Point[],
   checksByPointId: Map<string, InstallCheck>

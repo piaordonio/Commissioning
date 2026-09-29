@@ -46,11 +46,12 @@ Supabase database, multiple techs see the same job's live progress, not
 separate copies of it.
 
 A **Panel** filter, a **Status** filter (Not Started / In Progress /
-Commissioned — Commissioning status only, see above), and a single
-**search box** narrow down a long points list: the search box matches a
-point type (`AI`/`AO`/`BI`/`BO` — since that token is already embedded in
-the resolved point number) or any text in the descriptor, whichever hits
-first.
+Commissioned) and an **Install Status** filter (Not Started / In Progress
+/ Complete — see "Two checklists, one grid" below for how the two differ),
+and a single **search box** narrow down a long points list: the search box
+matches a point type (`AI`/`AO`/`BI`/`BO` — since that token is already
+embedded in the resolved point number) or any text in the descriptor,
+whichever hits first.
 
 ## Two checklists, one grid: Install and Commissioning
 
@@ -64,8 +65,12 @@ stand on the same panel at a glance — so both checklists live in the same
 grid, as two independent column groups (each with its own "Install" /
 "Commissioning" header bar and a heavier divider line between them), with
 a **Columns** toggle in the toolbar to show or hide either group
-independently. Hiding a group only hides its columns — its weighted
-percent (see below) still shows in the equipment group header either way.
+independently. Hiding a group hides everything that belongs to it — its 7
+checklist fields and its own Status/Notes (or Status/Date Commissioned, on
+the Commissioning side) — while the shared columns (the point-level Notes,
+Blocked By, Controller) always stay put. The weighted percent shown in the
+equipment group header is the one exception: both groups' percentages show
+there regardless of which columns are currently visible.
 
 A few things worth knowing if you're touching this:
 
@@ -87,10 +92,21 @@ A few things worth knowing if you're touching this:
   paper checksheet already weights them. N/A is treated the same way in
   both: excluded from the denominator, so an all-applicable-checked point
   (or an all-N/A one) reads 100% either way.
-- **Install has no Status/Date Commissioned equivalent** — by design, for
-  now. Its only rollup is the weighted percent shown in each equipment
-  group's header, right next to Commissioning's percent, both colored the
-  same green-above-90%/red-below-10% way.
+- **Install gets its own Status column and its own Notes column — but no
+  Date Installed.** Status is Not Started (nothing checked) / In Progress
+  (something checked) / Complete (every non-N/A field checked, same
+  vacuous-complete rule as the all-N/A edge case elsewhere in this app) —
+  the same plain bucketing Commissioning's Status uses, just unweighted
+  (see `installStatus()` in `web/src/installProgress.ts`), and there's a
+  matching **Install Status** filter in the toolbar next to Commissioning's
+  **Status** filter. Unlike Commissioning's Status/Date Commissioned pair,
+  Install Status isn't backed by a Postgres trigger or a stored column —
+  it's computed on read from the same 7 fields `installProgress()` already
+  uses, since there's no "date completed" requirement here driving a need
+  to persist a transition moment. Install's Notes is a separate free-text
+  field from the point-level Notes column (`install_checks.notes`, not
+  `points.notes`) — Install-context notes and commissioning-context notes
+  don't have to be the same note.
 - **One point, one install_checks row, always.** Every point gets a blank
   `install_checks` row the moment it's created — see
   `create_install_check_for_point()` in `supabase/schema.sql`, a trigger

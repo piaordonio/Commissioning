@@ -14,7 +14,12 @@ import {
   PointStatus,
 } from "../types";
 import { buildProgressByEquipment } from "../progress";
-import { buildInstallProgressByEquipment } from "../installProgress";
+import {
+  buildInstallProgressByEquipment,
+  installStatus,
+  InstallStatus,
+  INSTALL_STATUS_LABELS,
+} from "../installProgress";
 import { resolvedPointNumber, displayPanel } from "../pointNumber";
 import { autoFitColumnWidth } from "../textWidth";
 import { formatDateCommissioned } from "../formatDate";
@@ -59,6 +64,7 @@ export function PointsView({
   onBulkSetValues,
   onSetInstallValue,
   onBulkSetInstallValues,
+  onUpdateInstallNotes,
   onUpdatePoint,
   onDeletePoint,
 }: {
@@ -69,6 +75,7 @@ export function PointsView({
   onBulkSetValues: (updates: { id: string; field: string; value: string }[]) => void;
   onSetInstallValue: (pointId: string, field: InstallField, value: CheckState) => void;
   onBulkSetInstallValues: (updates: { id: string; field: string; value: string }[]) => void;
+  onUpdateInstallNotes: (pointId: string, notes: string) => void;
   onUpdatePoint: (point: Point, patch: Partial<Point>) => void;
   onDeletePoint: (point: Point) => void;
 }) {
@@ -79,6 +86,7 @@ export function PointsView({
   const [showRemoved, setShowRemoved] = useState(false);
   const [panelFilter, setPanelFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState<PointStatus | "">("");
+  const [installStatusFilter, setInstallStatusFilter] = useState<InstallStatus | "">("");
   const [search, setSearch] = useState("");
   const [showInstall, setShowInstall] = useState(true);
   const [showCommissioning, setShowCommissioning] = useState(true);
@@ -123,10 +131,11 @@ export function PointsView({
     return visiblePoints.filter((p) => {
       if (panelFilter && displayPanel(p.panel) !== panelFilter) return false;
       if (statusFilter && p.status !== statusFilter) return false;
+      if (installStatusFilter && installStatus(installChecksByPointId.get(p.id)) !== installStatusFilter) return false;
       if (!query) return true;
       return resolvedPointNumber(p).toLowerCase().includes(query) || p.descriptor.toLowerCase().includes(query);
     });
-  }, [visiblePoints, panelFilter, statusFilter, search]);
+  }, [visiblePoints, panelFilter, statusFilter, installStatusFilter, installChecksByPointId, search]);
 
   const rows = useMemo(
     () =>
@@ -402,6 +411,20 @@ export function PointsView({
             ))}
           </select>
         </label>
+        <label className="toolbar-label" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          Install Status
+          <select
+            value={installStatusFilter}
+            onChange={(e) => setInstallStatusFilter(e.target.value as InstallStatus | "")}
+          >
+            <option value="">All Statuses</option>
+            {(Object.keys(INSTALL_STATUS_LABELS) as InstallStatus[]).map((s) => (
+              <option key={s} value={s}>
+                {INSTALL_STATUS_LABELS[s]}
+              </option>
+            ))}
+          </select>
+        </label>
         <input
           type="text"
           placeholder="Search type (AI/AO/BI/BO) or descriptor…"
@@ -431,16 +454,16 @@ export function PointsView({
                 <th style={{ width: pointColWidth }}></th>
                 <th style={{ width: descColWidth }}></th>
                 {showInstall && (
-                  <th colSpan={INSTALL_FIELDS.length} className="column-group-header column-group-install">
+                  <th colSpan={INSTALL_FIELDS.length + 2} className="column-group-header column-group-install">
                     Install
                   </th>
                 )}
                 {showCommissioning && (
-                  <th colSpan={CHECK_FIELDS.length} className="column-group-header column-group-commissioning">
+                  <th colSpan={CHECK_FIELDS.length + 2} className="column-group-header column-group-commissioning">
                     Commissioning
                   </th>
                 )}
-                <th colSpan={6}></th>
+                <th colSpan={4}></th>
               </tr>
               <tr>
                 <th className="checklist-sticky-col" style={{ width: panelColWidth }}>
@@ -448,23 +471,31 @@ export function PointsView({
                 </th>
                 <th style={{ width: pointColWidth }}>Point #</th>
                 <th style={{ width: descColWidth }}>Descriptor</th>
-                {showInstall &&
-                  INSTALL_FIELDS.map((f) => (
-                    <th key={`install-${f}`} className="checklist-item-header">
-                      {INSTALL_FIELD_LABELS[f]}
-                    </th>
-                  ))}
-                {showCommissioning &&
-                  CHECK_FIELDS.map((f, i) => (
-                    <th
-                      key={`commissioning-${f}`}
-                      className={`checklist-item-header ${i === 0 && showInstall ? "divider-left" : ""}`}
-                    >
-                      {CHECK_FIELD_LABELS[f]}
-                    </th>
-                  ))}
-                <th className="divider-left">Status</th>
-                <th className="divider-left">Date Commissioned</th>
+                {showInstall && (
+                  <>
+                    {INSTALL_FIELDS.map((f) => (
+                      <th key={`install-${f}`} className="checklist-item-header">
+                        {INSTALL_FIELD_LABELS[f]}
+                      </th>
+                    ))}
+                    <th className="divider-left">Status</th>
+                    <th className="divider-left">Notes</th>
+                  </>
+                )}
+                {showCommissioning && (
+                  <>
+                    {CHECK_FIELDS.map((f, i) => (
+                      <th
+                        key={`commissioning-${f}`}
+                        className={`checklist-item-header ${i === 0 && showInstall ? "divider-left" : ""}`}
+                      >
+                        {CHECK_FIELD_LABELS[f]}
+                      </th>
+                    ))}
+                    <th className="divider-left">Status</th>
+                    <th className="divider-left">Date Commissioned</th>
+                  </>
+                )}
                 <th className="divider-left" style={{ width: notesColWidth }}>
                   Notes
                 </th>
@@ -479,11 +510,11 @@ export function PointsView({
                 const pct = progressByEquipment.get(g.equipmentId) ?? 0;
                 const installPct = installProgressByEquipment.get(g.equipmentId) ?? 0;
                 const visibleFieldCols =
-                  (showInstall ? INSTALL_FIELDS.length : 0) + (showCommissioning ? CHECK_FIELDS.length : 0);
+                  (showInstall ? INSTALL_FIELDS.length + 2 : 0) + (showCommissioning ? CHECK_FIELDS.length + 2 : 0);
                 return (
                   <Fragment key={g.equipmentId}>
                     <tr className="table-group-header">
-                      <td colSpan={3 + visibleFieldCols + 6}>
+                      <td colSpan={3 + visibleFieldCols + 4}>
                         {eq?.tag ?? g.equipmentId}
                         {eq?.location ? ` — ${eq.location}` : ""}{" "}
                         <span className="count-pill">{g.items.length}</span>{" "}
@@ -513,44 +544,67 @@ export function PointsView({
                             {!point.active && <span className="muted-text"> (removed)</span>}
                           </td>
                           <td>{point.descriptor}</td>
-                          {showInstall &&
-                            INSTALL_FIELDS.map((field, c) => {
-                              const cell: Cell = { group: "install", r, c };
-                              const v = getValue(cell);
-                              return (
-                                <td
-                                  key={`install-${field}`}
-                                  className={`checklist-cell checklist-${v || "empty"} ${
-                                    inSelection(cell) ? "checklist-selected" : ""
-                                  }`}
-                                  onClick={(e) => handleCellClick(cell, e)}
-                                >
-                                  {SYMBOL[v]}
-                                </td>
-                              );
-                            })}
-                          {showCommissioning &&
-                            CHECK_FIELDS.map((field, c) => {
-                              const cell: Cell = { group: "commissioning", r, c };
-                              const v = point[field];
-                              return (
-                                <td
-                                  key={`commissioning-${field}`}
-                                  className={`checklist-cell checklist-${v || "empty"} ${
-                                    c === 0 && showInstall ? "divider-left" : ""
-                                  } ${inSelection(cell) ? "checklist-selected" : ""}`}
-                                  onClick={(e) => handleCellClick(cell, e)}
-                                >
-                                  {SYMBOL[v]}
-                                </td>
-                              );
-                            })}
-                          <td className="divider-left">
-                            <span className={`status-pill status-${point.status}`}>
-                              {POINT_STATUS_LABELS[point.status]}
-                            </span>
-                          </td>
-                          <td className="divider-left">{formatDateCommissioned(point.date_commissioned)}</td>
+                          {showInstall && (
+                            <>
+                              {INSTALL_FIELDS.map((field, c) => {
+                                const cell: Cell = { group: "install", r, c };
+                                const v = getValue(cell);
+                                return (
+                                  <td
+                                    key={`install-${field}`}
+                                    className={`checklist-cell checklist-${v || "empty"} ${
+                                      inSelection(cell) ? "checklist-selected" : ""
+                                    }`}
+                                    onClick={(e) => handleCellClick(cell, e)}
+                                  >
+                                    {SYMBOL[v]}
+                                  </td>
+                                );
+                              })}
+                              <td className="divider-left">
+                                <span className={`status-pill status-${installStatus(installChecksByPointId.get(point.id))}`}>
+                                  {INSTALL_STATUS_LABELS[installStatus(installChecksByPointId.get(point.id))]}
+                                </span>
+                              </td>
+                              <td className="divider-left checklist-text-col">
+                                <input
+                                  key={`${point.id}-install-notes`}
+                                  className="checklist-inline-input"
+                                  defaultValue={installChecksByPointId.get(point.id)?.notes ?? ""}
+                                  placeholder="—"
+                                  onBlur={(e) => {
+                                    const current = installChecksByPointId.get(point.id)?.notes ?? "";
+                                    if (e.target.value !== current) onUpdateInstallNotes(point.id, e.target.value);
+                                  }}
+                                />
+                              </td>
+                            </>
+                          )}
+                          {showCommissioning && (
+                            <>
+                              {CHECK_FIELDS.map((field, c) => {
+                                const cell: Cell = { group: "commissioning", r, c };
+                                const v = point[field];
+                                return (
+                                  <td
+                                    key={`commissioning-${field}`}
+                                    className={`checklist-cell checklist-${v || "empty"} ${
+                                      c === 0 && showInstall ? "divider-left" : ""
+                                    } ${inSelection(cell) ? "checklist-selected" : ""}`}
+                                    onClick={(e) => handleCellClick(cell, e)}
+                                  >
+                                    {SYMBOL[v]}
+                                  </td>
+                                );
+                              })}
+                              <td className="divider-left">
+                                <span className={`status-pill status-${point.status}`}>
+                                  {POINT_STATUS_LABELS[point.status]}
+                                </span>
+                              </td>
+                              <td className="divider-left">{formatDateCommissioned(point.date_commissioned)}</td>
+                            </>
+                          )}
                           <td className="divider-left checklist-text-col checklist-notes-col">
                             <input
                               key={`${point.id}-notes`}

@@ -111,6 +111,14 @@ export default function App() {
     api.bulkSetInstallChecks(updates).catch(() => refreshAll());
   };
 
+  // Free-text, not a CheckState -- reuses the same bulkSetInstallChecks RPC
+  // (it already accepts any allowlisted field name keyed by point_id), just
+  // under a differently-typed handler so PointsView's props stay accurate.
+  const updateInstallNotes = (pointId: string, notes: string) => {
+    setInstallChecks((list) => list.map((ic) => (ic.point_id === pointId ? { ...ic, notes } : ic)));
+    api.bulkSetInstallChecks([{ id: pointId, field: "notes", value: notes }]).catch(() => refreshAll());
+  };
+
   const deletePoint = async (point: Point) => {
     const label = `${resolvedPointNumber(point)}${point.descriptor ? ` — ${point.descriptor}` : ""}`;
     if (!window.confirm(`Delete point ${label}? This cannot be undone.`)) return;
@@ -189,6 +197,7 @@ export default function App() {
             onBulkSetValues={bulkSetPoints}
             onSetInstallValue={setInstallValue}
             onBulkSetInstallValues={bulkSetInstallValues}
+            onUpdateInstallNotes={updateInstallNotes}
             onUpdatePoint={updatePoint}
             onDeletePoint={deletePoint}
           />
