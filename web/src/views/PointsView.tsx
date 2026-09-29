@@ -5,6 +5,21 @@ import { buildProgressByEquipment } from "../progress";
 const SYMBOL: Record<CheckState, string> = { "": "", check: "✓", x: "✗", na: "N/A" };
 const CYCLE: CheckState[] = ["", "check", "x", "na"];
 
+// Direct CP-panel points carry a raw "IP"/"OP" token in their point number
+// (from the source Access data) plus a separate Analog/Digital field; fold
+// the two into the single token techs actually use (AI/BI/AO/BO) instead of
+// showing them as separate columns. Zone-expanded points have no
+// analog_digital value (see mdbImport.ts) and pass through unchanged.
+function displayPointNumber(p: Point): string {
+  const ad = p.analog_digital.trim().toLowerCase();
+  const isAnalog = ad.startsWith("a");
+  const isDigital = ad.startsWith("d");
+  if (!isAnalog && !isDigital) return p.point_number;
+  if (p.point_number.includes("IP")) return p.point_number.replace("IP", isAnalog ? "AI" : "BI");
+  if (p.point_number.includes("OP")) return p.point_number.replace("OP", isAnalog ? "AO" : "BO");
+  return p.point_number;
+}
+
 function normalizeToken(raw: string): CheckState | null {
   const t = raw.trim().toLowerCase();
   if (t === "") return "";
@@ -245,10 +260,8 @@ export function PointsView({
           <table className="data-table checklist-table">
             <thead>
               <tr>
-                <th className="checklist-sticky-col">Point #</th>
-                <th>Panel</th>
-                <th>IP/OP</th>
-                <th>A/D</th>
+                <th className="checklist-sticky-col">Panel</th>
+                <th>Point #</th>
                 <th>Descriptor</th>
                 {CHECK_FIELDS.map((f) => (
                   <th key={f} className="checklist-item-header">
@@ -266,7 +279,7 @@ export function PointsView({
                 return (
                   <Fragment key={g.equipmentId}>
                     <tr className="table-group-header">
-                      <td colSpan={5 + CHECK_FIELDS.length + 2}>
+                      <td colSpan={3 + CHECK_FIELDS.length + 2}>
                         {eq?.tag ?? g.equipmentId}
                         {eq?.location ? ` — ${eq.location}` : ""}{" "}
                         <span className="count-pill">{g.items.length}</span>{" "}
@@ -277,13 +290,11 @@ export function PointsView({
                       const r = rowIndexById.get(point.id)!;
                       return (
                         <tr key={point.id} style={point.active ? undefined : { opacity: 0.55 }}>
-                          <td className="mono checklist-sticky-col">
-                            {point.point_number}
+                          <td className="checklist-sticky-col">{point.panel}</td>
+                          <td className="mono">
+                            {displayPointNumber(point)}
                             {!point.active && <span className="muted-text"> (removed)</span>}
                           </td>
-                          <td>{point.panel}</td>
-                          <td>{point.ip_op}</td>
-                          <td>{point.analog_digital}</td>
                           <td className="truncate checklist-name-col" title={point.descriptor}>
                             {point.descriptor}
                           </td>
