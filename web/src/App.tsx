@@ -222,7 +222,22 @@ export default function App() {
       )}
 
       {importing && (
-        <Modal title="Import Access Database" onClose={() => setImporting(false)}>
+        <Modal
+          title="Import Access Database"
+          onClose={async () => {
+            setImporting(false);
+            // Closing via the X (rather than completing the reconciliation
+            // screen's own "Done") skipped this refresh before -- an import
+            // that deactivated at least one point pauses on that screen, and
+            // dismissing it without clicking Done left the app's in-memory
+            // points/equipment stale even though the import itself had
+            // already been saved to Supabase. Always refresh on close now.
+            const list = await refreshProjects();
+            const target = projectId && list.some((p) => p.id === projectId) ? projectId : list[0]?.id ?? "";
+            setProjectId(target);
+            await refreshProjectData(target);
+          }}
+        >
           <ImportMdbModal
             projects={projects}
             defaultProjectId={projectId || undefined}
