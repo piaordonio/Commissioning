@@ -265,6 +265,7 @@ export function PointsView({
                 ))}
                 <th>Notes</th>
                 <th>Blocked By</th>
+                <th>Controller</th>
                 <th></th>
               </tr>
             </thead>
@@ -275,7 +276,7 @@ export function PointsView({
                 return (
                   <Fragment key={g.equipmentId}>
                     <tr className="table-group-header">
-                      <td colSpan={3 + CHECK_FIELDS.length + 3}>
+                      <td colSpan={3 + CHECK_FIELDS.length + 4}>
                         {eq?.tag ?? g.equipmentId}
                         {eq?.location ? ` — ${eq.location}` : ""}{" "}
                         <span className="count-pill">{g.items.length}</span>{" "}
@@ -290,9 +291,6 @@ export function PointsView({
                           <td className="mono">
                             {resolvedPointNumber(point)}
                             {!point.active && <span className="muted-text"> (removed)</span>}
-                            {point.on_controller === false && (
-                              <span className="controller-missing-pill">Not on Controller</span>
-                            )}
                           </td>
                           <td className="truncate checklist-name-col" title={point.descriptor}>
                             {point.descriptor}
@@ -332,6 +330,11 @@ export function PointsView({
                                 if (e.target.value !== point.blocked_by) onUpdatePoint(point, { blocked_by: e.target.value });
                               }}
                             />
+                          </td>
+                          <td>
+                            {point.on_controller === false && (
+                              <span className="controller-missing-pill">Not on Controller</span>
+                            )}
                           </td>
                           <td>
                             <button

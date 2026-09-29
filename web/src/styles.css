@@ -392,13 +392,38 @@ textarea {
 
 .controller-missing-pill {
   display: inline-block;
-  margin-left: 8px;
   padding: 2px 8px;
   border-radius: 999px;
   font-size: 11px;
   font-weight: 600;
   background: #fee2e2;
   color: #991b1b;
+}
+
+.report-header {
+  padding: 4px 0;
+}
+.report-header h2 {
+  margin: 0 0 4px;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: white;
+  }
+  .app-main {
+    overflow: visible;
+    padding: 0;
+  }
+  .table-group-header {
+    break-inside: avoid;
+  }
+  tr {
+    break-inside: avoid;
+  }
 }
 
 .progress-pill {

@@ -3,6 +3,7 @@ import { api } from "./api";
 import { Modal } from "./components/Modal";
 import { ImportMdbModal } from "./components/ImportMdbModal";
 import { VerifyControllerModal } from "./components/VerifyControllerModal";
+import { PointsReport } from "./components/PointsReport";
 import { PointsView } from "./views/PointsView";
 import { averageProgress } from "./progress";
 import { resolvedPointNumber } from "./pointNumber";
@@ -17,6 +18,7 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
   const [verifying, setVerifying] = useState(false);
+  const [printing, setPrinting] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -125,7 +127,7 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      <div className="app-header">
+      <div className="app-header no-print">
         <div className="app-title">
           <span className="app-logo">◎</span> Commissioning Points
         </div>
@@ -145,22 +147,29 @@ export default function App() {
         <button className="btn-secondary" disabled={!projectId} onClick={() => setVerifying(true)}>
           Check Against Controller
         </button>
+        <button className="btn-secondary" disabled={!projectId || points.length === 0} onClick={() => setPrinting(true)}>
+          Print Report
+        </button>
         <button className="btn-primary" onClick={() => setImporting(true)}>
           Import Access Database
         </button>
       </div>
 
-      {error && <div className="error-banner">{error}</div>}
+      {error && <div className="error-banner no-print">{error}</div>}
 
       <div className="app-main">
-        <PointsView
-          points={points}
-          equipment={equipment}
-          onSetValue={setPointValue}
-          onBulkSetValues={bulkSetPoints}
-          onUpdatePoint={updatePoint}
-          onDeletePoint={deletePoint}
-        />
+        {printing && currentProject ? (
+          <PointsReport project={currentProject} equipment={equipment} points={points} onBack={() => setPrinting(false)} />
+        ) : (
+          <PointsView
+            points={points}
+            equipment={equipment}
+            onSetValue={setPointValue}
+            onBulkSetValues={bulkSetPoints}
+            onUpdatePoint={updatePoint}
+            onDeletePoint={deletePoint}
+          />
+        )}
       </div>
 
       {confirmingDelete && currentProject && (
