@@ -80,12 +80,12 @@ export function PointsReport({
       </div>
 
       <div className="table-wrap">
-        <table className="data-table">
+        <table className="data-table report-table">
           <thead>
             <tr>
-              <th>Panel</th>
-              <th>Point #</th>
-              <th>Descriptor</th>
+              <th className="report-col-panel">Panel</th>
+              <th className="report-col-point">Point #</th>
+              <th className="checklist-name-col">Descriptor</th>
               {CHECK_FIELDS.map((f) => (
                 <th key={f} className="checklist-item-header">
                   {CHECK_FIELD_LABELS[f]}
@@ -110,8 +110,8 @@ export function PointsReport({
                   </tr>
                   {g.items.map((point) => (
                     <tr key={point.id}>
-                      <td>{displayPanel(point.panel)}</td>
-                      <td>{resolvedPointNumber(point)}</td>
+                      <td className="report-col-panel">{displayPanel(point.panel)}</td>
+                      <td className="report-col-point">{resolvedPointNumber(point)}</td>
                       <td className="truncate checklist-name-col" title={point.descriptor}>
                         {point.descriptor}
                       </td>

@@ -428,6 +428,27 @@ textarea {
   color: #166534;
 }
 
+.report-table th.report-col-panel,
+.report-table td.report-col-panel {
+  width: 64px;
+  min-width: 64px;
+  max-width: 64px;
+}
+
+.report-table th.report-col-point,
+.report-table td.report-col-point {
+  width: 100px;
+  min-width: 100px;
+  max-width: 100px;
+}
+
+.report-table th.checklist-name-col,
+.report-table td.checklist-name-col {
+  width: 200px;
+  min-width: 200px;
+  max-width: 200px;
+}
+
 .report-header {
   padding: 4px 0;
 }
