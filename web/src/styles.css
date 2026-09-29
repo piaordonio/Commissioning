@@ -485,16 +485,16 @@ textarea {
 
 .report-table th.checklist-name-col,
 .report-table td.checklist-name-col {
-  width: 160px;
-  min-width: 160px;
-  max-width: 160px;
+  width: 135px;
+  min-width: 135px;
+  max-width: 135px;
 }
 
 .report-table th.report-col-notes,
 .report-table td.report-col-notes {
-  width: 90px;
-  min-width: 90px;
-  max-width: 90px;
+  width: 115px;
+  min-width: 115px;
+  max-width: 115px;
 }
 
 .report-table th.report-col-blocked,
