@@ -327,12 +327,14 @@ textarea {
 
 .data-table th.checklist-item-header {
   text-align: center;
-  min-width: 40px;
-  max-width: 46px;
-  padding: 6px 2px;
+  width: 34px;
+  min-width: 34px;
+  max-width: 34px;
+  padding: 4px 2px;
   white-space: normal;
   overflow-wrap: break-word;
-  line-height: 1.2;
+  line-height: 1.15;
+  font-size: 11px;
   border-left: 1px solid var(--border);
 }
 
@@ -345,9 +347,10 @@ textarea {
   cursor: pointer;
   border-left: 1px solid var(--border);
   font-weight: 700;
-  min-width: 40px;
-  max-width: 46px;
-  padding: 9px 2px;
+  width: 34px;
+  min-width: 34px;
+  max-width: 34px;
+  padding: 8px 2px;
 }
 
 .checklist-cell:hover {

@@ -37,6 +37,8 @@ export function PointsView({
   const [anchor, setAnchor] = useState<Cell | null>(null);
   const [focus, setFocus] = useState<Cell | null>(null);
   const [showRemoved, setShowRemoved] = useState(false);
+  const [panelFilter, setPanelFilter] = useState("");
+  const [search, setSearch] = useState("");
 
   const equipmentById = useMemo(() => Object.fromEntries(equipment.map((e) => [e.id, e])), [equipment]);
 
@@ -51,14 +53,31 @@ export function PointsView({
 
   const visiblePoints = showRemoved ? points : activePoints;
 
+  const panelOptions = useMemo(
+    () => Array.from(new Set(visiblePoints.map((p) => displayPanel(p.panel)))).sort((a, b) => a.localeCompare(b)),
+    [visiblePoints]
+  );
+
+  // One search box covers both a point type (typing "AI" matches every
+  // Analog Input, since the resolved point number already embeds that
+  // token) and free text anywhere in the descriptor.
+  const filteredPoints = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return visiblePoints.filter((p) => {
+      if (panelFilter && displayPanel(p.panel) !== panelFilter) return false;
+      if (!query) return true;
+      return resolvedPointNumber(p).toLowerCase().includes(query) || p.descriptor.toLowerCase().includes(query);
+    });
+  }, [visiblePoints, panelFilter, search]);
+
   const rows = useMemo(
     () =>
-      [...visiblePoints].sort((a, b) => {
+      [...filteredPoints].sort((a, b) => {
         const ta = equipmentById[a.equipment_id]?.tag ?? "";
         const tb = equipmentById[b.equipment_id]?.tag ?? "";
         return ta === tb ? a.point_number.localeCompare(b.point_number) : ta.localeCompare(tb);
       }),
-    [visiblePoints, equipmentById]
+    [filteredPoints, equipmentById]
   );
 
   const rowIndexById = useMemo(() => {
@@ -242,6 +261,25 @@ export function PointsView({
         )}
       </div>
       <div className="toolbar">
+        <label className="toolbar-label" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          Panel
+          <select value={panelFilter} onChange={(e) => setPanelFilter(e.target.value)}>
+            <option value="">All Panels</option>
+            {panelOptions.map((p) => (
+              <option key={p} value={p}>
+                {p}
+              </option>
+            ))}
+          </select>
+        </label>
+        <input
+          type="text"
+          placeholder="Search type (AI/AO/BI/BO) or descriptor…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          style={{ minWidth: 260 }}
+        />
+        <div className="spacer" />
         <span className="muted-text">
           Click a cell to cycle ✓ / ✗ / N/A. Shift-click to select a range, then Ctrl/Cmd+C / V to copy-paste, or type
           c / x / n / 0 to fill. Notes and Blocked By are editable directly.
@@ -249,7 +287,11 @@ export function PointsView({
       </div>
 
       {rows.length === 0 ? (
-        <div className="empty-state">No points yet. Import an Access database to get started.</div>
+        <div className="empty-state">
+          {points.length === 0
+            ? "No points yet. Import an Access database to get started."
+            : "No points match this filter."}
+        </div>
       ) : (
         <div className="table-wrap checklist-wrap" ref={containerRef} tabIndex={0} onKeyDown={handleKeyDown}>
           <table className="data-table checklist-table">

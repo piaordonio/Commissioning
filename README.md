@@ -21,6 +21,11 @@ same deployment can host several jobs — and since every user hits the same
 Supabase database, multiple techs see the same job's live progress, not
 separate copies of it.
 
+A **Panel** filter and a single **search box** narrow down a long points
+list: the search box matches a point type (`AI`/`AO`/`BI`/`BO` — since
+that token is already embedded in the resolved point number) or any text
+in the descriptor, whichever hits first.
+
 ## Importing points from the Engtool Access database
 
 Rather than exporting to CSV and re-importing, this reads the `.mdb`/`.accdb`
