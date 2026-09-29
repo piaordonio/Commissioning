@@ -53,6 +53,12 @@ export function installStatus(check: InstallCheck | undefined): InstallStatus {
   return checked === 0 ? "not_started" : "in_progress";
 }
 
+/** Average weighted completion (0-1) across a set of points, e.g. every active point in a project. */
+export function averageInstallProgress(points: Point[], checksByPointId: Map<string, InstallCheck>): number {
+  if (points.length === 0) return 0;
+  return points.reduce((sum, p) => sum + installProgress(checksByPointId.get(p.id)), 0) / points.length;
+}
+
 export function buildInstallProgressByEquipment(
   points: Point[],
   checksByPointId: Map<string, InstallCheck>
@@ -65,8 +71,7 @@ export function buildInstallProgressByEquipment(
   }
   const result = new Map<string, number>();
   for (const [equipmentId, pts] of byEquipment) {
-    const avg = pts.reduce((sum, p) => sum + installProgress(checksByPointId.get(p.id)), 0) / pts.length;
-    result.set(equipmentId, Math.round(avg * 100));
+    result.set(equipmentId, Math.round(averageInstallProgress(pts, checksByPointId) * 100));
   }
   return result;
 }

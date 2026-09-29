@@ -92,8 +92,8 @@ A few things worth knowing if you're touching this:
   paper checksheet already weights them. N/A is treated the same way in
   both: excluded from the denominator, so an all-applicable-checked point
   (or an all-N/A one) reads 100% either way.
-- **Install gets its own Status column and its own Notes column — but no
-  Date Installed.** Status is Not Started (nothing checked) / In Progress
+- **Install gets its own Status column — but no Notes column and no Date
+  Installed.** Status is Not Started (nothing checked) / In Progress
   (something checked) / Complete (every non-N/A field checked, same
   vacuous-complete rule as the all-N/A edge case elsewhere in this app) —
   the same plain bucketing Commissioning's Status uses, just unweighted
@@ -103,10 +103,9 @@ A few things worth knowing if you're touching this:
   Install Status isn't backed by a Postgres trigger or a stored column —
   it's computed on read from the same 7 fields `installProgress()` already
   uses, since there's no "date completed" requirement here driving a need
-  to persist a transition moment. Install's Notes is a separate free-text
-  field from the point-level Notes column (`install_checks.notes`, not
-  `points.notes`) — Install-context notes and commissioning-context notes
-  don't have to be the same note.
+  to persist a transition moment. Notes is the one shared column between
+  the two checklists — a point has one Notes field, not a Commissioning
+  one and a separate Install one.
 - **One point, one install_checks row, always.** Every point gets a blank
   `install_checks` row the moment it's created — see
   `create_install_check_for_point()` in `supabase/schema.sql`, a trigger

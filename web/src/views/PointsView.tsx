@@ -64,7 +64,6 @@ export function PointsView({
   onBulkSetValues,
   onSetInstallValue,
   onBulkSetInstallValues,
-  onUpdateInstallNotes,
   onUpdatePoint,
   onDeletePoint,
 }: {
@@ -75,7 +74,6 @@ export function PointsView({
   onBulkSetValues: (updates: { id: string; field: string; value: string }[]) => void;
   onSetInstallValue: (pointId: string, field: InstallField, value: CheckState) => void;
   onBulkSetInstallValues: (updates: { id: string; field: string; value: string }[]) => void;
-  onUpdateInstallNotes: (pointId: string, notes: string) => void;
   onUpdatePoint: (point: Point, patch: Partial<Point>) => void;
   onDeletePoint: (point: Point) => void;
 }) {
@@ -454,7 +452,7 @@ export function PointsView({
                 <th style={{ width: pointColWidth }}></th>
                 <th style={{ width: descColWidth }}></th>
                 {showInstall && (
-                  <th colSpan={INSTALL_FIELDS.length + 2} className="column-group-header column-group-install">
+                  <th colSpan={INSTALL_FIELDS.length + 1} className="column-group-header column-group-install">
                     Install
                   </th>
                 )}
@@ -479,7 +477,6 @@ export function PointsView({
                       </th>
                     ))}
                     <th className="divider-left">Status</th>
-                    <th className="divider-left">Notes</th>
                   </>
                 )}
                 {showCommissioning && (
@@ -510,7 +507,7 @@ export function PointsView({
                 const pct = progressByEquipment.get(g.equipmentId) ?? 0;
                 const installPct = installProgressByEquipment.get(g.equipmentId) ?? 0;
                 const visibleFieldCols =
-                  (showInstall ? INSTALL_FIELDS.length + 2 : 0) + (showCommissioning ? CHECK_FIELDS.length + 2 : 0);
+                  (showInstall ? INSTALL_FIELDS.length + 1 : 0) + (showCommissioning ? CHECK_FIELDS.length + 2 : 0);
                 return (
                   <Fragment key={g.equipmentId}>
                     <tr className="table-group-header">
@@ -565,18 +562,6 @@ export function PointsView({
                                 <span className={`status-pill status-${installStatus(installChecksByPointId.get(point.id))}`}>
                                   {INSTALL_STATUS_LABELS[installStatus(installChecksByPointId.get(point.id))]}
                                 </span>
-                              </td>
-                              <td className="divider-left checklist-text-col">
-                                <input
-                                  key={`${point.id}-install-notes`}
-                                  className="checklist-inline-input"
-                                  defaultValue={installChecksByPointId.get(point.id)?.notes ?? ""}
-                                  placeholder="—"
-                                  onBlur={(e) => {
-                                    const current = installChecksByPointId.get(point.id)?.notes ?? "";
-                                    if (e.target.value !== current) onUpdateInstallNotes(point.id, e.target.value);
-                                  }}
-                                />
                               </td>
                             </>
                           )}

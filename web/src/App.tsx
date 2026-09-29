@@ -6,6 +6,7 @@ import { VerifyControllerModal } from "./components/VerifyControllerModal";
 import { PointsReport } from "./components/PointsReport";
 import { PointsView } from "./views/PointsView";
 import { averageProgress } from "./progress";
+import { averageInstallProgress } from "./installProgress";
 import { resolvedPointNumber } from "./pointNumber";
 import { CheckField, CheckState, Equipment, InstallCheck, InstallField, Point, Project } from "./types";
 
@@ -111,14 +112,6 @@ export default function App() {
     api.bulkSetInstallChecks(updates).catch(() => refreshAll());
   };
 
-  // Free-text, not a CheckState -- reuses the same bulkSetInstallChecks RPC
-  // (it already accepts any allowlisted field name keyed by point_id), just
-  // under a differently-typed handler so PointsView's props stay accurate.
-  const updateInstallNotes = (pointId: string, notes: string) => {
-    setInstallChecks((list) => list.map((ic) => (ic.point_id === pointId ? { ...ic, notes } : ic)));
-    api.bulkSetInstallChecks([{ id: pointId, field: "notes", value: notes }]).catch(() => refreshAll());
-  };
-
   const deletePoint = async (point: Point) => {
     const label = `${resolvedPointNumber(point)}${point.descriptor ? ` — ${point.descriptor}` : ""}`;
     if (!window.confirm(`Delete point ${label}? This cannot be undone.`)) return;
@@ -132,6 +125,14 @@ export default function App() {
   };
 
   const overallPct = useMemo(() => Math.round(averageProgress(points) * 100), [points]);
+  const installChecksByPointId = useMemo(
+    () => new Map(installChecks.map((ic) => [ic.point_id, ic])),
+    [installChecks]
+  );
+  const overallInstallPct = useMemo(
+    () => Math.round(averageInstallProgress(points, installChecksByPointId) * 100),
+    [points, installChecksByPointId]
+  );
   const currentProject = projects.find((p) => p.id === projectId);
 
   const deleteProject = async () => {
@@ -167,7 +168,12 @@ export default function App() {
             </option>
           ))}
         </select>
-        {points.length > 0 && <span className="progress-pill">{overallPct}% complete</span>}
+        {points.length > 0 && (
+          <>
+            <span className="progress-pill">Install {overallInstallPct}%</span>
+            <span className="progress-pill">Commissioning {overallPct}%</span>
+          </>
+        )}
         <div className="spacer" />
         <button className="btn-danger" disabled={!projectId} onClick={() => setConfirmingDelete(true)}>
           Delete Project
@@ -197,7 +203,6 @@ export default function App() {
             onBulkSetValues={bulkSetPoints}
             onSetInstallValue={setInstallValue}
             onBulkSetInstallValues={bulkSetInstallValues}
-            onUpdateInstallNotes={updateInstallNotes}
             onUpdatePoint={updatePoint}
             onDeletePoint={deletePoint}
           />

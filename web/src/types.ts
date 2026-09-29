@@ -127,9 +127,6 @@ export type Point = {
 export type InstallCheck = {
   id: string;
   point_id: string;
-  // Separate from the point-level `notes` above -- that one stays about
-  // commissioning context, this one is install-specific.
-  notes: string;
   created_at: string;
   updated_at: string;
 } & Record<InstallField, CheckState>;

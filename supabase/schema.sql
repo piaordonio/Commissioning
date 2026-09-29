@@ -106,8 +106,11 @@ create table if not exists install_checks (
 );
 
 -- Idempotent for anyone who already ran an earlier version of this file
--- before Install had its own Notes column (separate from points.notes,
--- which keeps meaning "commissioning-context notes").
+-- that had Install use its own separate Notes column -- reverted to a
+-- single shared points.notes for both checklists, so this column is kept
+-- in place (unused by the app from here on) rather than dropped, same
+-- reasoning as points.end_to_end above: dropping it isn't reversible and
+-- nothing requires it to go.
 alter table install_checks add column if not exists notes text not null default '';
 
 create index if not exists idx_equipment_project on equipment(project_id);
@@ -442,8 +445,7 @@ begin
         panel_term = old_ic.panel_term,
         field_term = old_ic.field_term,
         tagged = old_ic.tagged,
-        end_to_end = old_ic.end_to_end,
-        notes = old_ic.notes
+        end_to_end = old_ic.end_to_end
     from install_checks as old_ic
     where new_ic.point_id = p_new_point_id
       and old_ic.point_id = p_old_point_id;
@@ -488,7 +490,7 @@ as $$
 declare
   v_item jsonb;
   v_field text;
-  v_allowed text[] := array['pipe_flex', 'pulled', 'mounted', 'panel_term', 'field_term', 'tagged', 'end_to_end', 'notes'];
+  v_allowed text[] := array['pipe_flex', 'pulled', 'mounted', 'panel_term', 'field_term', 'tagged', 'end_to_end'];
 begin
   for v_item in select * from jsonb_array_elements(p_updates) loop
     v_field := v_item->>'field';
