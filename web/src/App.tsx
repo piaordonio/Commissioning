@@ -14,6 +14,8 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const refreshProjects = async () => {
     const list = await api.list<Project>("projects");
@@ -85,6 +87,24 @@ export default function App() {
   };
 
   const overallPct = useMemo(() => Math.round(averageProgress(points) * 100), [points]);
+  const currentProject = projects.find((p) => p.id === projectId);
+
+  const deleteProject = async () => {
+    if (!projectId) return;
+    setDeleting(true);
+    try {
+      await api.remove("projects", projectId);
+      const list = await refreshProjects();
+      const nextId = list[0]?.id ?? "";
+      setProjectId(nextId);
+      await refreshProjectData(nextId);
+      setConfirmingDelete(false);
+    } catch (err: any) {
+      setError(err.message ?? "Failed to delete project");
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   if (loading) return <div className="loading-screen">Loading…</div>;
 
@@ -104,6 +124,9 @@ export default function App() {
         </select>
         {points.length > 0 && <span className="progress-pill">{overallPct}% complete</span>}
         <div className="spacer" />
+        <button className="btn-danger" disabled={!projectId} onClick={() => setConfirmingDelete(true)}>
+          Delete Project
+        </button>
         <button className="btn-primary" onClick={() => setImporting(true)}>
           Import Access Database
         </button>
@@ -120,6 +143,29 @@ export default function App() {
           onUpdatePoint={updatePoint}
         />
       </div>
+
+      {confirmingDelete && currentProject && (
+        <Modal title="Delete Project" onClose={() => setConfirmingDelete(false)}>
+          <p>
+            Permanently delete{" "}
+            <strong>
+              {currentProject.project_number ? `${currentProject.project_number} — ${currentProject.name}` : currentProject.name}
+            </strong>
+            ? This removes all {equipment.length} equipment and {points.length} points under it, including every
+            checklist mark, note, and blocked-by entry. This cannot be undone.
+          </p>
+          {error && <div className="error-banner">{error}</div>}
+          <div className="form-actions">
+            <div className="spacer" />
+            <button className="btn-secondary" disabled={deleting} onClick={() => setConfirmingDelete(false)}>
+              Cancel
+            </button>
+            <button className="btn-danger" disabled={deleting} onClick={deleteProject}>
+              {deleting ? "Deleting…" : "Delete Project"}
+            </button>
+          </div>
+        </Modal>
+      )}
 
       {importing && (
         <Modal title="Import Access Database" onClose={() => setImporting(false)}>
