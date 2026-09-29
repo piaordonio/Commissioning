@@ -81,8 +81,33 @@ alter table points add column if not exists function_test text not null default 
 alter table points add column if not exists status text not null default 'not_started' check (status in ('not_started', 'in_progress', 'commissioned'));
 alter table points add column if not exists date_commissioned date;
 
+-- Install-phase checklist, tracked separately from the 7-field commissioning
+-- checklist above: installers work these 7 fields (often concurrently with
+-- someone else commissioning a neighboring point), they're weighted rather
+-- than equally-weighted (see INSTALL_FIELD_WEIGHTS in web/src/types.ts), and
+-- End-to-End used to live on points -- it moved here since the commissioning
+-- side verifies it during Function Test rather than tracking it separately.
+-- One row per point (point_id unique), auto-created by
+-- create_install_check_for_point() below so every code path that inserts a
+-- point gets one for free, the same "regardless of which code path" pattern
+-- set_point_status_and_date() already relies on.
+create table if not exists install_checks (
+  id uuid primary key default gen_random_uuid(),
+  point_id uuid not null unique references points(id) on delete cascade,
+  pipe_flex text not null default '' check (pipe_flex in ('', 'check', 'x', 'na')),
+  pulled text not null default '' check (pulled in ('', 'check', 'x', 'na')),
+  mounted text not null default '' check (mounted in ('', 'check', 'x', 'na')),
+  panel_term text not null default '' check (panel_term in ('', 'check', 'x', 'na')),
+  field_term text not null default '' check (field_term in ('', 'check', 'x', 'na')),
+  tagged text not null default '' check (tagged in ('', 'check', 'x', 'na')),
+  end_to_end text not null default '' check (end_to_end in ('', 'check', 'x', 'na')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create index if not exists idx_equipment_project on equipment(project_id);
 create index if not exists idx_points_equipment on points(equipment_id);
+create index if not exists idx_install_checks_point on install_checks(point_id);
 
 -- ---- Keep updated_at current on every UPDATE, regardless of caller ----
 
@@ -108,15 +133,51 @@ drop trigger if exists trg_points_updated_at on points;
 create trigger trg_points_updated_at before update on points
   for each row execute function set_updated_at();
 
--- ---- Keep status/date_commissioned in sync with the 8 checklist fields,
+drop trigger if exists trg_install_checks_updated_at on install_checks;
+create trigger trg_install_checks_updated_at before update on install_checks
+  for each row execute function set_updated_at();
+
+-- Every point gets a blank install_checks row for free the moment it's
+-- created, regardless of which code path inserted it (an .mdb import, "Add
+-- as New Point" from a controller check, a future import path) -- so the
+-- frontend never has to special-case "this point has no install row yet".
+create or replace function create_install_check_for_point()
+returns trigger
+language plpgsql
+as $$
+begin
+  insert into install_checks (point_id) values (new.id)
+    on conflict (point_id) do nothing;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_points_create_install_check on points;
+create trigger trg_points_create_install_check after insert on points
+  for each row execute function create_install_check_for_point();
+
+-- One-time (idempotent) backfill for points that existed before this table
+-- did: carries forward whatever was already recorded in the old
+-- points.end_to_end column rather than starting every point's Install
+-- End-to-End blank. That column stays in place (unused by the app from here
+-- on) rather than being dropped, since dropping it isn't reversible and
+-- nothing requires it to go.
+insert into install_checks (point_id, end_to_end)
+  select id, end_to_end from points
+  on conflict (point_id) do nothing;
+
+-- ---- Keep status/date_commissioned in sync with the 7 checklist fields,
 -- regardless of which code path touched them (a single cell edit, a
 -- bulk-fill range, a re-import match, or a renumber pairing) ----
+-- (End-to-End moved to install_checks -- verified during Function Test
+-- rather than tracked as its own commissioning field, so it's excluded
+-- from this count.)
 -- An N/A field counts as satisfied, matching pointProgress() in
 -- web/src/progress.ts: N/A is excluded from the denominator there too,
 -- so a point with everything applicable checked (N/A's aside) already
 -- reads as fully complete elsewhere in this app -- Commissioned agrees
 -- with that instead of introducing a stricter, inconsistent definition.
--- All 8 fields N/A is the same "vacuously complete" edge case
+-- All 7 fields N/A is the same "vacuously complete" edge case
 -- pointProgress() already treats as 100%, so it reads as Commissioned
 -- here too. date_commissioned is set only on the transition into
 -- Commissioned (never overwritten while already Commissioned, so it
@@ -133,7 +194,6 @@ declare
 begin
   v_checked := (case when new.wired = 'check' then 1 else 0 end)
              + (case when new.tagged = 'check' then 1 else 0 end)
-             + (case when new.end_to_end = 'check' then 1 else 0 end)
              + (case when new.calibrate = 'check' then 1 else 0 end)
              + (case when new.function_test = 'check' then 1 else 0 end)
              + (case when new.sequence = 'check' then 1 else 0 end)
@@ -141,14 +201,13 @@ begin
              + (case when new.graphics = 'check' then 1 else 0 end);
   v_na := (case when new.wired = 'na' then 1 else 0 end)
         + (case when new.tagged = 'na' then 1 else 0 end)
-        + (case when new.end_to_end = 'na' then 1 else 0 end)
         + (case when new.calibrate = 'na' then 1 else 0 end)
         + (case when new.function_test = 'na' then 1 else 0 end)
         + (case when new.sequence = 'na' then 1 else 0 end)
         + (case when new.alarm = 'na' then 1 else 0 end)
         + (case when new.graphics = 'na' then 1 else 0 end);
 
-  if v_checked = 8 - v_na then
+  if v_checked = 7 - v_na then
     new.status := 'commissioned';
     if new.date_commissioned is null then
       new.date_commissioned := current_date;
@@ -165,6 +224,13 @@ $$;
 drop trigger if exists trg_points_status_and_date on points;
 create trigger trg_points_status_and_date before insert or update on points
   for each row execute function set_point_status_and_date();
+
+-- One-time (idempotent-safe) recompute: existing rows' status/date_commissioned
+-- were computed against the old 8-field formula and won't update on their own
+-- until next written. A plain UPDATE re-fires the BEFORE UPDATE trigger above
+-- for every row even though no column value actually changes, so this is safe
+-- to run (and re-run) without touching any other column.
+update points set updated_at = updated_at;
 
 -- ---- RPCs for the two operations that need to be all-or-nothing ----
 -- (a Postgres function runs inside the calling transaction, so either of
@@ -349,7 +415,6 @@ begin
   update points as new_pt
     set wired = old_pt.wired,
         tagged = old_pt.tagged,
-        end_to_end = old_pt.end_to_end,
         calibrate = old_pt.calibrate,
         function_test = old_pt.function_test,
         sequence = old_pt.sequence,
@@ -361,6 +426,24 @@ begin
     where new_pt.id = p_new_point_id
       and old_pt.id = p_old_point_id;
 
+  -- The new point already has its own blank install_checks row (created by
+  -- trg_points_create_install_check on insert), so this transfers values
+  -- onto it rather than re-pointing the old row -- point_id is unique, so
+  -- the old row can't just be reassigned to the new point's id.
+  update install_checks as new_ic
+    set pipe_flex = old_ic.pipe_flex,
+        pulled = old_ic.pulled,
+        mounted = old_ic.mounted,
+        panel_term = old_ic.panel_term,
+        field_term = old_ic.field_term,
+        tagged = old_ic.tagged,
+        end_to_end = old_ic.end_to_end
+    from install_checks as old_ic
+    where new_ic.point_id = p_new_point_id
+      and old_ic.point_id = p_old_point_id;
+
+  -- Cascades to the old point's install_checks row too (point_id references
+  -- points(id) on delete cascade).
   delete from points where id = p_old_point_id;
 end;
 $$;
@@ -376,12 +459,35 @@ as $$
 declare
   v_item jsonb;
   v_field text;
-  v_allowed text[] := array['wired', 'tagged', 'end_to_end', 'calibrate', 'function_test', 'sequence', 'alarm', 'graphics', 'notes', 'blocked_by'];
+  v_allowed text[] := array['wired', 'tagged', 'calibrate', 'function_test', 'sequence', 'alarm', 'graphics', 'notes', 'blocked_by'];
 begin
   for v_item in select * from jsonb_array_elements(p_updates) loop
     v_field := v_item->>'field';
     if v_field = any(v_allowed) then
       execute format('update points set %I = $1, updated_at = now() where id = $2', v_field)
+        using (v_item->>'value'), (v_item->>'id')::uuid;
+    end if;
+  end loop;
+end;
+$$;
+
+-- Same shape as bulk_set_points() above, targeting install_checks instead —
+-- keyed by point_id (not install_checks.id), since the grid already has
+-- each row's point id on hand from the shared points list and never needs
+-- to look up an install_checks row's own id separately.
+create or replace function bulk_set_install_checks(p_updates jsonb)
+returns void
+language plpgsql
+as $$
+declare
+  v_item jsonb;
+  v_field text;
+  v_allowed text[] := array['pipe_flex', 'pulled', 'mounted', 'panel_term', 'field_term', 'tagged', 'end_to_end'];
+begin
+  for v_item in select * from jsonb_array_elements(p_updates) loop
+    v_field := v_item->>'field';
+    if v_field = any(v_allowed) then
+      execute format('update install_checks set %I = $1, updated_at = now() where point_id = $2', v_field)
         using (v_item->>'value'), (v_item->>'id')::uuid;
     end if;
   end loop;
@@ -421,6 +527,7 @@ $$;
 alter table projects enable row level security;
 alter table equipment enable row level security;
 alter table points enable row level security;
+alter table install_checks enable row level security;
 
 drop policy if exists "anon full access" on projects;
 create policy "anon full access" on projects for all using (true) with check (true);
@@ -431,7 +538,11 @@ create policy "anon full access" on equipment for all using (true) with check (t
 drop policy if exists "anon full access" on points;
 create policy "anon full access" on points for all using (true) with check (true);
 
+drop policy if exists "anon full access" on install_checks;
+create policy "anon full access" on install_checks for all using (true) with check (true);
+
 grant execute on function import_points(uuid, jsonb, jsonb) to anon, authenticated;
 grant execute on function bulk_set_points(jsonb) to anon, authenticated;
+grant execute on function bulk_set_install_checks(jsonb) to anon, authenticated;
 grant execute on function pair_reimported_point(uuid, uuid) to anon, authenticated;
 grant execute on function set_controller_status(jsonb) to anon, authenticated;

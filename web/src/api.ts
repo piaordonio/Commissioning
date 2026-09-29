@@ -40,6 +40,15 @@ export const api = {
     return assertNoError(data as T[] | null, error);
   },
 
+  // install_checks likewise don't carry project_id -- fetched by the point
+  // ids the caller already has from listPoints(), one row per point (see
+  // create_install_check_for_point() in supabase/schema.sql).
+  listInstallChecks: async <T>(pointIds: string[]): Promise<T[]> => {
+    if (pointIds.length === 0) return [];
+    const { data, error } = await supabase.from("install_checks").select("*").in("point_id", pointIds);
+    return assertNoError(data as T[] | null, error);
+  },
+
   // `as any`: this client isn't wired to Supabase's generated Database types
   // (no schema codegen step for a project this size), so .insert()/.update()
   // have nothing to structurally check Partial<T> against.
@@ -62,6 +71,17 @@ export const api = {
   // supabase/schema.sql) so a range-fill or paste can't land half-applied.
   bulkSetPoints: async (updates: { id: string; field: string; value: string }[]): Promise<void> => {
     const { error } = await supabase.rpc("bulk_set_points", { p_updates: updates });
+    if (error) throw new Error(error.message);
+  },
+
+  // Same shape as bulkSetPoints, targeting install_checks (see
+  // bulk_set_install_checks in supabase/schema.sql). Used for both a single
+  // cell click and a range-fill/paste, unlike points -- there's no plain
+  // per-field update() path for install checks, since the RPC needs
+  // point_id as the lookup key anyway (the id every call site already has),
+  // not install_checks.id.
+  bulkSetInstallChecks: async (updates: { id: string; field: string; value: string }[]): Promise<void> => {
+    const { error } = await supabase.rpc("bulk_set_install_checks", { p_updates: updates });
     if (error) throw new Error(error.message);
   },
 

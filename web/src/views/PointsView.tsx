@@ -5,11 +5,16 @@ import {
   CheckField,
   CheckState,
   Equipment,
+  INSTALL_FIELDS,
+  INSTALL_FIELD_LABELS,
+  InstallCheck,
+  InstallField,
   Point,
   POINT_STATUS_LABELS,
   PointStatus,
 } from "../types";
 import { buildProgressByEquipment } from "../progress";
+import { buildInstallProgressByEquipment } from "../installProgress";
 import { resolvedPointNumber, displayPanel } from "../pointNumber";
 import { autoFitColumnWidth } from "../textWidth";
 import { formatDateCommissioned } from "../formatDate";
@@ -30,20 +35,40 @@ function normalizeToken(raw: string): CheckState | null {
   return null;
 }
 
-type Cell = { r: number; c: number };
+// Install and Commissioning are two independent selection regions sharing
+// the same row order -- a shift-click, Ctrl+C/V, or keyboard-fill always
+// stays within one group's 7 columns rather than spanning both, since
+// pasting install data onto commissioning cells (or vice versa) would
+// never make sense.
+type Group = "install" | "commissioning";
+type Cell = { group: Group; r: number; c: number };
+
+function fieldCount(group: Group): number {
+  return group === "commissioning" ? CHECK_FIELDS.length : INSTALL_FIELDS.length;
+}
+
+function fieldName(cell: Cell): string {
+  return cell.group === "commissioning" ? CHECK_FIELDS[cell.c] : INSTALL_FIELDS[cell.c];
+}
 
 export function PointsView({
   points,
   equipment,
+  installChecks,
   onSetValue,
   onBulkSetValues,
+  onSetInstallValue,
+  onBulkSetInstallValues,
   onUpdatePoint,
   onDeletePoint,
 }: {
   points: Point[];
   equipment: Equipment[];
+  installChecks: InstallCheck[];
   onSetValue: (pointId: string, field: CheckField, value: CheckState) => void;
   onBulkSetValues: (updates: { id: string; field: string; value: string }[]) => void;
+  onSetInstallValue: (pointId: string, field: InstallField, value: CheckState) => void;
+  onBulkSetInstallValues: (updates: { id: string; field: string; value: string }[]) => void;
   onUpdatePoint: (point: Point, patch: Partial<Point>) => void;
   onDeletePoint: (point: Point) => void;
 }) {
@@ -55,6 +80,13 @@ export function PointsView({
   const [panelFilter, setPanelFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState<PointStatus | "">("");
   const [search, setSearch] = useState("");
+  const [showInstall, setShowInstall] = useState(true);
+  const [showCommissioning, setShowCommissioning] = useState(true);
+
+  const installChecksByPointId = useMemo(
+    () => new Map(installChecks.map((ic) => [ic.point_id, ic])),
+    [installChecks]
+  );
 
   const equipmentById = useMemo(() => Object.fromEntries(equipment.map((e) => [e.id, e])), [equipment]);
 
@@ -71,6 +103,10 @@ export function PointsView({
   // a removed point shouldn't count toward (or against) completion just
   // because it's temporarily visible for review.
   const progressByEquipment = useMemo(() => buildProgressByEquipment(activePoints), [activePoints]);
+  const installProgressByEquipment = useMemo(
+    () => buildInstallProgressByEquipment(activePoints, installChecksByPointId),
+    [activePoints, installChecksByPointId]
+  );
 
   const visiblePoints = showRemoved ? points : activePoints;
 
@@ -139,11 +175,16 @@ export function PointsView({
     return list;
   }, [rows]);
 
-  const getValue = (r: number, c: number): CheckState => rows[r][CHECK_FIELDS[c]];
+  const getValue = (cell: Cell): CheckState => {
+    if (cell.group === "commissioning") return rows[cell.r][CHECK_FIELDS[cell.c]];
+    const ic = installChecksByPointId.get(rows[cell.r].id);
+    return ic ? ic[INSTALL_FIELDS[cell.c]] : "";
+  };
 
   const bounds = () => {
-    if (!anchor || !focus) return null;
+    if (!anchor || !focus || anchor.group !== focus.group) return null;
     return {
+      group: anchor.group,
       rMin: Math.min(anchor.r, focus.r),
       rMax: Math.max(anchor.r, focus.r),
       cMin: Math.min(anchor.c, focus.c),
@@ -151,32 +192,38 @@ export function PointsView({
     };
   };
 
-  const inSelection = (r: number, c: number) => {
+  const inSelection = (cell: Cell) => {
     const b = bounds();
-    return !!b && r >= b.rMin && r <= b.rMax && c >= b.cMin && c <= b.cMax;
+    return (
+      !!b && b.group === cell.group && cell.r >= b.rMin && cell.r <= b.rMax && cell.c >= b.cMin && cell.c <= b.cMax
+    );
   };
 
-  const selectCell = (r: number, c: number, extend: boolean) => {
-    if (extend && anchor) setFocus({ r, c });
+  // Shift-clicking into the other group starts a fresh selection there
+  // rather than trying to extend across two unrelated field lists.
+  const selectCell = (cell: Cell, extend: boolean) => {
+    if (extend && anchor && anchor.group === cell.group) setFocus(cell);
     else {
-      setAnchor({ r, c });
-      setFocus({ r, c });
+      setAnchor(cell);
+      setFocus(cell);
     }
     containerRef.current?.focus();
   };
 
-  const cycleCell = (r: number, c: number) => {
-    const current = getValue(r, c);
+  const cycleCell = (cell: Cell) => {
+    const current = getValue(cell);
     const next = CYCLE[(CYCLE.indexOf(current) + 1) % CYCLE.length];
-    onSetValue(rows[r].id, CHECK_FIELDS[c], next);
+    const pointId = rows[cell.r].id;
+    if (cell.group === "commissioning") onSetValue(pointId, CHECK_FIELDS[cell.c], next);
+    else onSetInstallValue(pointId, INSTALL_FIELDS[cell.c], next);
   };
 
-  const handleCellClick = (r: number, c: number, e: React.MouseEvent) => {
-    if (e.shiftKey && anchor) {
-      selectCell(r, c, true);
+  const handleCellClick = (cell: Cell, e: React.MouseEvent) => {
+    if (e.shiftKey && anchor && anchor.group === cell.group) {
+      selectCell(cell, true);
     } else {
-      selectCell(r, c, false);
-      cycleCell(r, c);
+      selectCell(cell, false);
+      cycleCell(cell);
     }
   };
 
@@ -186,10 +233,11 @@ export function PointsView({
     const updates: { id: string; field: string; value: string }[] = [];
     for (let r = b.rMin; r <= b.rMax; r++) {
       for (let c = b.cMin; c <= b.cMax; c++) {
-        updates.push({ id: rows[r].id, field: CHECK_FIELDS[c], value: state });
+        updates.push({ id: rows[r].id, field: fieldName({ group: b.group, r, c }), value: state });
       }
     }
-    onBulkSetValues(updates);
+    if (b.group === "commissioning") onBulkSetValues(updates);
+    else onBulkSetInstallValues(updates);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -209,7 +257,7 @@ export function PointsView({
       const grid: CheckState[][] = [];
       for (let r = b.rMin; r <= b.rMax; r++) {
         const row: CheckState[] = [];
-        for (let c = b.cMin; c <= b.cMax; c++) row.push(getValue(r, c));
+        for (let c = b.cMin; c <= b.cMax; c++) row.push(getValue({ group: b.group, r, c }));
         grid.push(row);
       }
       clipboardRef.current = grid;
@@ -221,27 +269,29 @@ export function PointsView({
     if (mod && e.key.toLowerCase() === "v") {
       e.preventDefault();
       const b = bounds()!;
+      const dispatch = b.group === "commissioning" ? onBulkSetValues : onBulkSetInstallValues;
       const paste = (grid: (CheckState | null)[][]) => {
         const updates: { id: string; field: string; value: string }[] = [];
         if (grid.length === 1 && grid[0].length === 1 && (b.rMax > b.rMin || b.cMax > b.cMin)) {
           const v = grid[0][0];
           if (v === null) return;
           for (let r = b.rMin; r <= b.rMax; r++)
-            for (let c = b.cMin; c <= b.cMax; c++) updates.push({ id: rows[r].id, field: CHECK_FIELDS[c], value: v });
+            for (let c = b.cMin; c <= b.cMax; c++)
+              updates.push({ id: rows[r].id, field: fieldName({ group: b.group, r, c }), value: v });
         } else {
           for (let i = 0; i < grid.length; i++) {
             const r = b.rMin + i;
             if (r >= rows.length) break;
             for (let j = 0; j < grid[i].length; j++) {
               const c = b.cMin + j;
-              if (c >= CHECK_FIELDS.length) break;
+              if (c >= fieldCount(b.group)) break;
               const v = grid[i][j];
               if (v === null) continue;
-              updates.push({ id: rows[r].id, field: CHECK_FIELDS[c], value: v });
+              updates.push({ id: rows[r].id, field: fieldName({ group: b.group, r, c }), value: v });
             }
           }
         }
-        if (updates.length) onBulkSetValues(updates);
+        if (updates.length) dispatch(updates);
       };
 
       navigator.clipboard
@@ -278,8 +328,8 @@ export function PointsView({
       const [dr, dc] = moves[e.key];
       const base = e.shiftKey ? focus : anchor;
       const r = Math.min(rows.length - 1, Math.max(0, base.r + dr));
-      const c = Math.min(CHECK_FIELDS.length - 1, Math.max(0, base.c + dc));
-      selectCell(r, c, e.shiftKey);
+      const c = Math.min(fieldCount(base.group) - 1, Math.max(0, base.c + dc));
+      selectCell({ group: base.group, r, c }, e.shiftKey);
       return;
     }
 
@@ -315,6 +365,21 @@ export function PointsView({
         )}
       </div>
       <div className="toolbar">
+        <div className="toolbar-label" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span>Columns</span>
+          <label style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            <input type="checkbox" checked={showInstall} onChange={(e) => setShowInstall(e.target.checked)} />
+            Install
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            <input
+              type="checkbox"
+              checked={showCommissioning}
+              onChange={(e) => setShowCommissioning(e.target.checked)}
+            />
+            Commissioning
+          </label>
+        </div>
         <label className="toolbar-label" style={{ display: "flex", alignItems: "center", gap: 6 }}>
           Panel
           <select value={panelFilter} onChange={(e) => setPanelFilter(e.target.value)}>
@@ -362,16 +427,42 @@ export function PointsView({
           <table className="data-table checklist-table">
             <thead>
               <tr>
+                <th className="checklist-sticky-col" style={{ width: panelColWidth }}></th>
+                <th style={{ width: pointColWidth }}></th>
+                <th style={{ width: descColWidth }}></th>
+                {showInstall && (
+                  <th colSpan={INSTALL_FIELDS.length} className="column-group-header column-group-install">
+                    Install
+                  </th>
+                )}
+                {showCommissioning && (
+                  <th colSpan={CHECK_FIELDS.length} className="column-group-header column-group-commissioning">
+                    Commissioning
+                  </th>
+                )}
+                <th colSpan={6}></th>
+              </tr>
+              <tr>
                 <th className="checklist-sticky-col" style={{ width: panelColWidth }}>
                   Panel
                 </th>
                 <th style={{ width: pointColWidth }}>Point #</th>
                 <th style={{ width: descColWidth }}>Descriptor</th>
-                {CHECK_FIELDS.map((f) => (
-                  <th key={f} className="checklist-item-header">
-                    {CHECK_FIELD_LABELS[f]}
-                  </th>
-                ))}
+                {showInstall &&
+                  INSTALL_FIELDS.map((f) => (
+                    <th key={`install-${f}`} className="checklist-item-header">
+                      {INSTALL_FIELD_LABELS[f]}
+                    </th>
+                  ))}
+                {showCommissioning &&
+                  CHECK_FIELDS.map((f, i) => (
+                    <th
+                      key={`commissioning-${f}`}
+                      className={`checklist-item-header ${i === 0 && showInstall ? "divider-left" : ""}`}
+                    >
+                      {CHECK_FIELD_LABELS[f]}
+                    </th>
+                  ))}
                 <th className="divider-left">Status</th>
                 <th className="divider-left">Date Commissioned</th>
                 <th className="divider-left" style={{ width: notesColWidth }}>
@@ -386,19 +477,29 @@ export function PointsView({
               {groups.map((g) => {
                 const eq = equipmentById[g.equipmentId];
                 const pct = progressByEquipment.get(g.equipmentId) ?? 0;
+                const installPct = installProgressByEquipment.get(g.equipmentId) ?? 0;
+                const visibleFieldCols =
+                  (showInstall ? INSTALL_FIELDS.length : 0) + (showCommissioning ? CHECK_FIELDS.length : 0);
                 return (
                   <Fragment key={g.equipmentId}>
                     <tr className="table-group-header">
-                      <td colSpan={3 + CHECK_FIELDS.length + 6}>
+                      <td colSpan={3 + visibleFieldCols + 6}>
                         {eq?.tag ?? g.equipmentId}
                         {eq?.location ? ` — ${eq.location}` : ""}{" "}
                         <span className="count-pill">{g.items.length}</span>{" "}
                         <span
                           className={`progress-pill ${
+                            installPct > 90 ? "progress-pill-high" : installPct < 10 ? "progress-pill-low" : ""
+                          }`}
+                        >
+                          Install {installPct}%
+                        </span>{" "}
+                        <span
+                          className={`progress-pill ${
                             pct > 90 ? "progress-pill-high" : pct < 10 ? "progress-pill-low" : ""
                           }`}
                         >
-                          {pct}%
+                          Commissioning {pct}%
                         </span>
                       </td>
                     </tr>
@@ -412,20 +513,38 @@ export function PointsView({
                             {!point.active && <span className="muted-text"> (removed)</span>}
                           </td>
                           <td>{point.descriptor}</td>
-                          {CHECK_FIELDS.map((field, c) => {
-                            const v = point[field];
-                            return (
-                              <td
-                                key={field}
-                                className={`checklist-cell checklist-${v || "empty"} ${
-                                  inSelection(r, c) ? "checklist-selected" : ""
-                                }`}
-                                onClick={(e) => handleCellClick(r, c, e)}
-                              >
-                                {SYMBOL[v]}
-                              </td>
-                            );
-                          })}
+                          {showInstall &&
+                            INSTALL_FIELDS.map((field, c) => {
+                              const cell: Cell = { group: "install", r, c };
+                              const v = getValue(cell);
+                              return (
+                                <td
+                                  key={`install-${field}`}
+                                  className={`checklist-cell checklist-${v || "empty"} ${
+                                    inSelection(cell) ? "checklist-selected" : ""
+                                  }`}
+                                  onClick={(e) => handleCellClick(cell, e)}
+                                >
+                                  {SYMBOL[v]}
+                                </td>
+                              );
+                            })}
+                          {showCommissioning &&
+                            CHECK_FIELDS.map((field, c) => {
+                              const cell: Cell = { group: "commissioning", r, c };
+                              const v = point[field];
+                              return (
+                                <td
+                                  key={`commissioning-${field}`}
+                                  className={`checklist-cell checklist-${v || "empty"} ${
+                                    c === 0 && showInstall ? "divider-left" : ""
+                                  } ${inSelection(cell) ? "checklist-selected" : ""}`}
+                                  onClick={(e) => handleCellClick(cell, e)}
+                                >
+                                  {SYMBOL[v]}
+                                </td>
+                              );
+                            })}
                           <td className="divider-left">
                             <span className={`status-pill status-${point.status}`}>
                               {POINT_STATUS_LABELS[point.status]}

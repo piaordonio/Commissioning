@@ -8,18 +8,21 @@ that BMS techs currently use to track individual point checkout.
 ## What it does
 
 For every BMS point on a job — not just each piece of equipment — track the
-8 fields the legacy checksheet's 7 have grown into: **Wired, Tagged,
-End-to-End, Calibrate, Function Test, Sequence, Alarm, Graphics**, plus
-**Notes** and **Blocked By**, in a click-to-cycle grid modeled on the `apps`
-tracker's `ChecklistView` (click a cell to cycle ✓ / ✗ / N/A, shift-click to
-select a range, Ctrl/Cmd+C / V to copy-paste across cells, or type `c` / `x`
-/ `n` / `0` to bulk-fill a selection).
+**Commissioning** checklist: **Wired, Tagged, Calibrate, Function Test,
+Sequence, Alarm, Graphics**, plus **Notes** and **Blocked By**, in a
+click-to-cycle grid modeled on the `apps` tracker's `ChecklistView` (click a
+cell to cycle ✓ / ✗ / N/A, shift-click to select a range, Ctrl/Cmd+C / V to
+copy-paste across cells, or type `c` / `x` / `n` / `0` to bulk-fill a
+selection). Alongside it is a separate **Install** checklist for the
+installer's own paper checksheet — see "Two checklists, one grid" below.
 
-Two more columns summarize those 8 for you, both maintained entirely by a
-Postgres trigger (`set_point_status_and_date()` in `supabase/schema.sql`) —
-never written directly by the app, so they stay correct no matter which
-code path touches a checklist field (a single click, a bulk range-fill, a
-re-import match, a renumber pairing):
+Two more columns summarize the Commissioning checklist for you, both
+maintained entirely by a Postgres trigger (`set_point_status_and_date()` in
+`supabase/schema.sql`) — never written directly by the app, so they stay
+correct no matter which code path touches a checklist field (a single
+click, a bulk range-fill, a re-import match, a renumber pairing). This is
+Commissioning-only — Install doesn't get its own Status/Date columns, just
+the weighted percent described below:
 
 - **Status** — a colored pill: **Not Started** (nothing checked yet),
   **In Progress** (at least one field checked), or **Commissioned** (every
@@ -43,10 +46,66 @@ Supabase database, multiple techs see the same job's live progress, not
 separate copies of it.
 
 A **Panel** filter, a **Status** filter (Not Started / In Progress /
-Commissioned), and a single **search box** narrow down a long points
-list: the search box matches a point type (`AI`/`AO`/`BI`/`BO` — since
-that token is already embedded in the resolved point number) or any text
-in the descriptor, whichever hits first.
+Commissioned — Commissioning status only, see above), and a single
+**search box** narrow down a long points list: the search box matches a
+point type (`AI`/`AO`/`BI`/`BO` — since that token is already embedded in
+the resolved point number) or any text in the descriptor, whichever hits
+first.
+
+## Two checklists, one grid: Install and Commissioning
+
+Installers fill out their own paper checksheet — **Pipe/Flex, Pulled,
+Mounted, Panel Term., Field Term., Tagged, End-to-End** — and that work
+often overlaps in time with commissioning: you can be functionally testing
+one point while an installer is still pulling wire on the point next to it.
+Splitting that onto a separate page would lose exactly the thing that
+makes tracking both worthwhile — seeing where install and commissioning
+stand on the same panel at a glance — so both checklists live in the same
+grid, as two independent column groups (each with its own "Install" /
+"Commissioning" header bar and a heavier divider line between them), with
+a **Columns** toggle in the toolbar to show or hide either group
+independently. Hiding a group only hides its columns — its weighted
+percent (see below) still shows in the equipment group header either way.
+
+A few things worth knowing if you're touching this:
+
+- **Install's "Tagged" is not Commissioning's "Tagged".** The installer
+  self-attests their own tag under Install; Commissioning's Tagged is you
+  independently verifying it. Two separate columns, same label, different
+  point in the process.
+- **End-to-End lives under Install, not Commissioning** — it moved there
+  because it's what you're actually confirming during Function Test rather
+  than a separate step worth its own Commissioning column. A point that
+  was End-to-End-checked before this feature shipped keeps that mark: it
+  was carried forward into the new Install row for that point during the
+  migration (see `supabase/schema.sql`'s one-time backfill), not lost.
+- **Install is weighted, Commissioning isn't.** Commissioning's 7 fields
+  are equally weighted (see `pointProgress()` in `web/src/progress.ts`).
+  Install's 7 are weighted 40/30/10/10/5/2/3 (Pipe/Flex heaviest, Tagged
+  lightest — see `INSTALL_FIELD_WEIGHTS` in `web/src/types.ts` and
+  `installProgress()` in `web/src/installProgress.ts`), matching how the
+  paper checksheet already weights them. N/A is treated the same way in
+  both: excluded from the denominator, so an all-applicable-checked point
+  (or an all-N/A one) reads 100% either way.
+- **Install has no Status/Date Commissioned equivalent** — by design, for
+  now. Its only rollup is the weighted percent shown in each equipment
+  group's header, right next to Commissioning's percent, both colored the
+  same green-above-90%/red-below-10% way.
+- **One point, one install_checks row, always.** Every point gets a blank
+  `install_checks` row the moment it's created — see
+  `create_install_check_for_point()` in `supabase/schema.sql`, a trigger
+  rather than something every point-creation code path has to remember to
+  do (an .mdb import, "Add as New Point" from a controller check, and any
+  future path all get it for free). A re-import pairing
+  (`pair_reimported_point()`) carries the Install row's values forward the
+  same way it already does for Commissioning's.
+- **The grid's selection engine treats Install and Commissioning as two
+  independent regions.** Shift-click range-select, Ctrl/Cmd+C/V, and the
+  c/x/n/0 keyboard fill all work on both groups the same way they always
+  did on Commissioning — but a selection never spans both groups at once
+  (shift-clicking into the other group starts a fresh selection there
+  instead), since pasting Install data onto Commissioning cells wouldn't
+  mean anything.
 
 ## Importing points from the Engtool Access database
 
@@ -259,14 +318,14 @@ the client bundle regardless (it's public by design in Supabase's model).
 If this tool grows real user accounts, tightening these policies (e.g.
 scoping by project membership) is the first thing to do before that matters.
 
-### Why four operations are Postgres functions, not plain inserts/updates
+### Why five operations are Postgres functions, not plain inserts/updates
 
-`import_points()`, `bulk_set_points()`, `pair_reimported_point()`, and
-`set_controller_status()` (all in `supabase/schema.sql`) exist so an
-import, a checklist range-fill/paste, a renumber-pairing, or a controller
-check is all-or-nothing — a Postgres function runs inside one transaction,
-so a failure partway through rolls back everything instead of leaving an
-import half-applied.
+`import_points()`, `bulk_set_points()`, `bulk_set_install_checks()`,
+`pair_reimported_point()`, and `set_controller_status()` (all in
+`supabase/schema.sql`) exist so an import, a checklist range-fill/paste, a
+renumber-pairing, or a controller check is all-or-nothing — a Postgres
+function runs inside one transaction, so a failure partway through rolls
+back everything instead of leaving an import half-applied.
 
 *(Verified against a real local PostgreSQL 16 instance from this
 environment — not a live Supabase project, since none was available here,
@@ -278,14 +337,24 @@ group disappearing, a renumber pairing transferring progress and removing
 the old row, and — using the real Hell's Kitchen `.mdb` import and its real
 EnteliWEB controller export — a controller check flagging the right points
 matched/unmatched and a controller-reconciliation pairing correcting a
-point's number while leaving its checklist progress untouched. All behaved
-exactly as designed. What's NOT verified: the Supabase-specific pieces
-that only exist on their platform, not plain Postgres — the RLS policies'
-actual behavior under the `anon` role (that role doesn't exist on a local
-install, so the grants targeting it were skipped in this testing) and the
-Supabase-generated REST API surface `supabase-js` talks to. Try a real
-import against your own Supabase project before relying on this for a live
-job.)*
+point's number while leaving its checklist progress untouched. For the
+Install checklist specifically: confirmed every new point gets an
+`install_checks` row automatically (`create_install_check_for_point()`),
+that a pre-existing point's already-checked `points.end_to_end` carries
+forward into its new Install row on the one-time backfill, that
+`pair_reimported_point()` transfers an old point's Install values onto the
+new point's row (not just its Commissioning ones) and the old row's
+`install_checks` row cascades away with it, and that the Commissioning
+status trigger's 7-field formula (post-End-to-End-removal) walks correctly
+through Not Started → In Progress → Commissioned → back to In Progress on
+an uncheck → Commissioned again on re-check → the all-N/A edge case. All
+behaved exactly as designed. What's NOT verified: the Supabase-specific
+pieces that only exist on their platform, not plain Postgres — the RLS
+policies' actual behavior under the `anon` role (that role doesn't exist
+on a local install, so the grants targeting it were skipped in this
+testing) and the Supabase-generated REST API surface `supabase-js` talks
+to. Try a real import against your own Supabase project before relying on
+this for a live job.)*
 
 ## Known gaps
 

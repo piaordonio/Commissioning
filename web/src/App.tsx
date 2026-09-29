@@ -7,12 +7,13 @@ import { PointsReport } from "./components/PointsReport";
 import { PointsView } from "./views/PointsView";
 import { averageProgress } from "./progress";
 import { resolvedPointNumber } from "./pointNumber";
-import { CheckField, CheckState, Equipment, Point, Project } from "./types";
+import { CheckField, CheckState, Equipment, InstallCheck, InstallField, Point, Project } from "./types";
 
 export default function App() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [equipment, setEquipment] = useState<Equipment[]>([]);
   const [points, setPoints] = useState<Point[]>([]);
+  const [installChecks, setInstallChecks] = useState<InstallCheck[]>([]);
   const [projectId, setProjectId] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -32,6 +33,7 @@ export default function App() {
     if (!id) {
       setEquipment([]);
       setPoints([]);
+      setInstallChecks([]);
       return;
     }
     const [eq, pts] = await Promise.all([
@@ -40,6 +42,7 @@ export default function App() {
     ]);
     setEquipment(eq);
     setPoints(pts);
+    setInstallChecks(await api.listInstallChecks<InstallCheck>(pts.map((p) => p.id)));
   };
 
   useEffect(() => {
@@ -89,6 +92,23 @@ export default function App() {
   const updatePoint = (point: Point, patch: Partial<Point>) => {
     setPoints((list) => list.map((p) => (p.id === point.id ? { ...p, ...patch } : p)));
     api.update<Point>("points", point.id, patch).catch(() => refreshAll());
+  };
+
+  const setInstallValue = (pointId: string, field: InstallField, value: CheckState) => {
+    setInstallChecks((list) => list.map((ic) => (ic.point_id === pointId ? { ...ic, [field]: value } : ic)));
+    api.bulkSetInstallChecks([{ id: pointId, field, value }]).catch(() => refreshAll());
+  };
+
+  const bulkSetInstallValues = (updates: { id: string; field: string; value: string }[]) => {
+    setInstallChecks((list) => {
+      const byPointId = new Map(list.map((ic) => [ic.point_id, ic]));
+      for (const u of updates) {
+        const ic = byPointId.get(u.id);
+        if (ic) byPointId.set(u.id, { ...ic, [u.field]: u.value });
+      }
+      return Array.from(byPointId.values());
+    });
+    api.bulkSetInstallChecks(updates).catch(() => refreshAll());
   };
 
   const deletePoint = async (point: Point) => {
@@ -164,8 +184,11 @@ export default function App() {
           <PointsView
             points={points}
             equipment={equipment}
+            installChecks={installChecks}
             onSetValue={setPointValue}
             onBulkSetValues={bulkSetPoints}
+            onSetInstallValue={setInstallValue}
+            onBulkSetInstallValues={bulkSetInstallValues}
             onUpdatePoint={updatePoint}
             onDeletePoint={deletePoint}
           />

@@ -1,9 +1,11 @@
 export type CheckState = "" | "check" | "x" | "na";
 
+// End-to-End lives under Install (see INSTALL_FIELDS below), not here --
+// it's verified during Function Test rather than tracked as its own
+// commissioning field.
 export const CHECK_FIELDS = [
   "wired",
   "tagged",
-  "end_to_end",
   "calibrate",
   "function_test",
   "sequence",
@@ -15,12 +17,50 @@ export type CheckField = (typeof CHECK_FIELDS)[number];
 export const CHECK_FIELD_LABELS: Record<CheckField, string> = {
   wired: "Wired",
   tagged: "Tagged",
-  end_to_end: "End-to-End",
   calibrate: "Calibrate",
   function_test: "Function Test",
   sequence: "Sequence",
   alarm: "Alarm",
   graphics: "Graphics",
+};
+
+// The installer's own checksheet, tracked separately from the commissioning
+// checklist above -- installers are often still pulling/mounting/terminating
+// while someone else is commissioning a different point, and this list is
+// weighted rather than equally-weighted (installProgress() in
+// web/src/installProgress.ts uses INSTALL_FIELD_WEIGHTS, not a plain
+// count-of-checked like pointProgress()). "Tagged" here is the installer's
+// own self-attested tag, independent of the Commissioning "Tagged" field
+// (which is you verifying it).
+export const INSTALL_FIELDS = [
+  "pipe_flex",
+  "pulled",
+  "mounted",
+  "panel_term",
+  "field_term",
+  "tagged",
+  "end_to_end",
+] as const;
+export type InstallField = (typeof INSTALL_FIELDS)[number];
+
+export const INSTALL_FIELD_LABELS: Record<InstallField, string> = {
+  pipe_flex: "Pipe/Flex",
+  pulled: "Pulled",
+  mounted: "Mounted",
+  panel_term: "Panel Term.",
+  field_term: "Field Term.",
+  tagged: "Tagged",
+  end_to_end: "End-to-End",
+};
+
+export const INSTALL_FIELD_WEIGHTS: Record<InstallField, number> = {
+  pipe_flex: 40,
+  pulled: 30,
+  mounted: 10,
+  panel_term: 10,
+  field_term: 5,
+  tagged: 2,
+  end_to_end: 3,
 };
 
 export type PointStatus = "not_started" | "in_progress" | "commissioned";
@@ -79,3 +119,14 @@ export type Point = {
   created_at: string;
   updated_at: string;
 } & Record<CheckField, CheckState>;
+
+// One row per point (point_id unique), auto-created server-side the moment
+// a point is inserted -- see create_install_check_for_point() in
+// supabase/schema.sql -- so the frontend can always assume one exists for
+// every point without a null-check at the call site.
+export type InstallCheck = {
+  id: string;
+  point_id: string;
+  created_at: string;
+  updated_at: string;
+} & Record<InstallField, CheckState>;

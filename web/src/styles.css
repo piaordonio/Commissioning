@@ -358,6 +358,38 @@ textarea {
   background: #f8fafc;
 }
 
+/* .checklist-cell/.checklist-item-header already carry their own 1px
+   border-left as a routine per-column hairline -- stacking .divider-left's
+   equal-weight border on top of that would be a no-op. This compound
+   selector (two classes, so it wins on specificity regardless of source
+   order -- see the .data-table th vs .checklist-item-header history) makes
+   the boundary between the Install and Commissioning column groups
+   actually read as a group boundary rather than blending into the routine
+   column lines either side of it. */
+.checklist-cell.divider-left,
+.checklist-item-header.divider-left {
+  border-left: 2px solid var(--text-muted);
+}
+
+.column-group-header {
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 2px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.column-group-install {
+  background: #fff7ed;
+  color: #9a3412;
+}
+
+.column-group-commissioning {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
 .checklist-check {
   color: #16a34a;
 }
