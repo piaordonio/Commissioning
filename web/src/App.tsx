@@ -124,14 +124,19 @@ export default function App() {
     }
   };
 
-  const overallPct = useMemo(() => Math.round(averageProgress(points) * 100), [points]);
+  // A removed/inactive point shouldn't drag these down (or prop them up) --
+  // same reasoning PointsView.tsx already applies to its own per-equipment
+  // pills, e.g. a renumbered-and-reimported point sitting inactive at 0%
+  // shouldn't make an otherwise-100%-complete project read as less than 100%.
+  const activePoints = useMemo(() => points.filter((p) => p.active), [points]);
+  const overallPct = useMemo(() => Math.round(averageProgress(activePoints) * 100), [activePoints]);
   const installChecksByPointId = useMemo(
     () => new Map(installChecks.map((ic) => [ic.point_id, ic])),
     [installChecks]
   );
   const overallInstallPct = useMemo(
-    () => Math.round(averageInstallProgress(points, installChecksByPointId) * 100),
-    [points, installChecksByPointId]
+    () => Math.round(averageInstallProgress(activePoints, installChecksByPointId) * 100),
+    [activePoints, installChecksByPointId]
   );
   const currentProject = projects.find((p) => p.id === projectId);
 
@@ -168,7 +173,7 @@ export default function App() {
             </option>
           ))}
         </select>
-        {points.length > 0 && (
+        {activePoints.length > 0 && (
           <>
             <span className="progress-pill">Install {overallInstallPct}%</span>
             <span className="progress-pill">Commissioning {overallPct}%</span>
