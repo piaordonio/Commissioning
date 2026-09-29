@@ -196,7 +196,18 @@ export default function App() {
       )}
 
       {verifying && (
-        <Modal title="Check Against Controller" onClose={() => setVerifying(false)}>
+        <Modal
+          title="Check Against Controller"
+          onClose={async () => {
+            setVerifying(false);
+            // Closing via the X (rather than "Done" below) skipped this
+            // refresh before -- any point/equipment added or paired during
+            // the reconciliation screen was already saved, but the app's
+            // in-memory state (and anything printed from it) stayed stale
+            // until the next full reload. Always refresh on close now.
+            await refreshProjectData(projectId);
+          }}
+        >
           <VerifyControllerModal
             projectId={projectId}
             points={points}
