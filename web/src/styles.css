@@ -327,9 +327,10 @@ textarea {
 
 .data-table th.checklist-item-header {
   text-align: center;
-  width: 34px;
-  min-width: 34px;
-  max-width: 34px;
+  vertical-align: middle;
+  width: 60px;
+  min-width: 60px;
+  max-width: 60px;
   padding: 4px 2px;
   white-space: normal;
   overflow-wrap: break-word;
@@ -347,9 +348,9 @@ textarea {
   cursor: pointer;
   border-left: 1px solid var(--border);
   font-weight: 700;
-  width: 34px;
-  min-width: 34px;
-  max-width: 34px;
+  width: 60px;
+  min-width: 60px;
+  max-width: 60px;
   padding: 8px 2px;
 }
 
