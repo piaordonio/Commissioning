@@ -1,8 +1,18 @@
 import { Fragment, useMemo, useRef, useState } from "react";
-import { CHECK_FIELDS, CHECK_FIELD_LABELS, CheckField, CheckState, Equipment, Point, POINT_STATUS_LABELS } from "../types";
+import {
+  CHECK_FIELDS,
+  CHECK_FIELD_LABELS,
+  CheckField,
+  CheckState,
+  Equipment,
+  Point,
+  POINT_STATUS_LABELS,
+  PointStatus,
+} from "../types";
 import { buildProgressByEquipment } from "../progress";
 import { resolvedPointNumber, displayPanel } from "../pointNumber";
 import { autoFitColumnWidth } from "../textWidth";
+import { formatDateCommissioned } from "../formatDate";
 
 const BODY_FONT = '13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
 const HEADER_FONT = '600 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
@@ -43,6 +53,7 @@ export function PointsView({
   const [focus, setFocus] = useState<Cell | null>(null);
   const [showRemoved, setShowRemoved] = useState(false);
   const [panelFilter, setPanelFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState<PointStatus | "">("");
   const [search, setSearch] = useState("");
 
   const equipmentById = useMemo(() => Object.fromEntries(equipment.map((e) => [e.id, e])), [equipment]);
@@ -75,10 +86,11 @@ export function PointsView({
     const query = search.trim().toLowerCase();
     return visiblePoints.filter((p) => {
       if (panelFilter && displayPanel(p.panel) !== panelFilter) return false;
+      if (statusFilter && p.status !== statusFilter) return false;
       if (!query) return true;
       return resolvedPointNumber(p).toLowerCase().includes(query) || p.descriptor.toLowerCase().includes(query);
     });
-  }, [visiblePoints, panelFilter, search]);
+  }, [visiblePoints, panelFilter, statusFilter, search]);
 
   const rows = useMemo(
     () =>
@@ -314,6 +326,17 @@ export function PointsView({
             ))}
           </select>
         </label>
+        <label className="toolbar-label" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          Status
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as PointStatus | "")}>
+            <option value="">All Statuses</option>
+            {(Object.keys(POINT_STATUS_LABELS) as PointStatus[]).map((s) => (
+              <option key={s} value={s}>
+                {POINT_STATUS_LABELS[s]}
+              </option>
+            ))}
+          </select>
+        </label>
         <input
           type="text"
           placeholder="Search type (AI/AO/BI/BO) or descriptor…"
@@ -349,9 +372,11 @@ export function PointsView({
                     {CHECK_FIELD_LABELS[f]}
                   </th>
                 ))}
-                <th>Status</th>
-                <th>Date Commissioned</th>
-                <th style={{ width: notesColWidth }}>Notes</th>
+                <th className="divider-left">Status</th>
+                <th className="divider-left">Date Commissioned</th>
+                <th className="divider-left" style={{ width: notesColWidth }}>
+                  Notes
+                </th>
                 <th>Blocked By</th>
                 <th>Controller</th>
                 <th></th>
@@ -368,7 +393,13 @@ export function PointsView({
                         {eq?.tag ?? g.equipmentId}
                         {eq?.location ? ` — ${eq.location}` : ""}{" "}
                         <span className="count-pill">{g.items.length}</span>{" "}
-                        <span className="progress-pill">{pct}%</span>
+                        <span
+                          className={`progress-pill ${
+                            pct > 90 ? "progress-pill-high" : pct < 10 ? "progress-pill-low" : ""
+                          }`}
+                        >
+                          {pct}%
+                        </span>
                       </td>
                     </tr>
                     {g.items.map((point) => {
@@ -395,13 +426,13 @@ export function PointsView({
                               </td>
                             );
                           })}
-                          <td>
+                          <td className="divider-left">
                             <span className={`status-pill status-${point.status}`}>
                               {POINT_STATUS_LABELS[point.status]}
                             </span>
                           </td>
-                          <td>{point.date_commissioned ?? ""}</td>
-                          <td className="checklist-text-col checklist-notes-col">
+                          <td className="divider-left">{formatDateCommissioned(point.date_commissioned)}</td>
+                          <td className="divider-left checklist-text-col checklist-notes-col">
                             <input
                               key={`${point.id}-notes`}
                               className="checklist-inline-input"

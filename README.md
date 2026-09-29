@@ -42,7 +42,8 @@ same deployment can host several jobs — and since every user hits the same
 Supabase database, multiple techs see the same job's live progress, not
 separate copies of it.
 
-A **Panel** filter and a single **search box** narrow down a long points
+A **Panel** filter, a **Status** filter (Not Started / In Progress /
+Commissioned), and a single **search box** narrow down a long points
 list: the search box matches a point type (`AI`/`AO`/`BI`/`BO` — since
 that token is already embedded in the resolved point number) or any text
 in the descriptor, whichever hits first.
@@ -183,15 +184,28 @@ active points only, regardless of the grid's "show removed" toggle.
 
 Header carries an Ainsworth letterhead (`web/public/ainsworth-logo.jpg`),
 the generation date, points/percent complete, and a "Commissioned By"
-field you type in right before printing (local to that print session,
-not saved to the project — it's who ran *this* check, not project data).
+dropdown you pick from right before printing. Names typed in via "+ Add
+name…" are remembered in that browser's `localStorage` (not saved to the
+project — it's who ran *this* check, a per-machine convenience, not
+project data shared across techs). A "Hide Date Commissioned column"
+checkbox in the toolbar drops that column from the printed table when a
+handoff doesn't need it — neither control prints itself (`no-print`).
+
+Each equipment group's progress pill reads its color off the same
+percentage the grid shows: green above 90%, red below 10%, the default
+indigo in between — a quick visual scan across a long panel list.
 
 Two print-specific fixes worth knowing about if you touch this file:
 browsers don't print background colors by default, so the blue equipment
 group-header rows need an explicit `print-color-adjust: exact` or they
 render as blank white bars; and the page margin is set via `@page` in
 `styles.css`, not container padding, since print mode strips that padding
-anyway.
+anyway. The table also gets its own `.report-table-wrap` override
+(`overflow: visible; flex-shrink: 0;`) rather than the grid's scrolling
+`.table-wrap` — the report is one long printable document, not a fixed-
+height scroll panel, and without this override the flex column would
+shrink it and pop up a second, nested scrollbar next to the page's real
+one.
 
 ## Stack
 

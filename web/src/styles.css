@@ -513,9 +513,9 @@ textarea {
 
 .report-table th.report-col-date,
 .report-table td.report-col-date {
-  width: 56px;
-  min-width: 56px;
-  max-width: 56px;
+  width: 78px;
+  min-width: 78px;
+  max-width: 78px;
   white-space: nowrap;
 }
 
@@ -526,9 +526,9 @@ textarea {
 
 .report-table th.checklist-item-header,
 .report-table td.checklist-cell {
-  width: 34px;
-  min-width: 34px;
-  max-width: 34px;
+  width: 31px;
+  min-width: 31px;
+  max-width: 31px;
   font-size: 10px;
   padding: 4px 1px;
 }
@@ -610,4 +610,30 @@ textarea {
   font-weight: 600;
   background: #eef2ff;
   color: #4338ca;
+}
+
+.progress-pill-high {
+  color: #16a34a;
+}
+
+.progress-pill-low {
+  color: #dc2626;
+}
+
+/* Marks the start of a logical column group (Status / Date Commissioned /
+   Notes, each a rollup or free-text field distinct from the 8 checklist
+   columns before them) -- shared between the grid and the report so both
+   read the same groupings. */
+.divider-left {
+  border-left: 1px solid var(--border);
+}
+
+/* The report is a standalone printable document, not a scrolling panel:
+   its own overflow:auto (inherited from .table-wrap) would clip against
+   the flex column's height and pop up a second, nested scrollbar next to
+   the page's real one. Letting it grow past its flex box and rely on
+   .app-main's own scroll keeps only one scrollbar on screen. */
+.report-table-wrap {
+  overflow: visible;
+  flex-shrink: 0;
 }
