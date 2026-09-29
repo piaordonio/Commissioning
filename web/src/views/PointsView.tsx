@@ -1,24 +1,10 @@
 import { Fragment, useMemo, useRef, useState } from "react";
 import { CHECK_FIELDS, CHECK_FIELD_LABELS, CheckField, CheckState, Equipment, Point } from "../types";
 import { buildProgressByEquipment } from "../progress";
+import { resolvedPointNumber } from "../pointNumber";
 
 const SYMBOL: Record<CheckState, string> = { "": "", check: "✓", x: "✗", na: "N/A" };
 const CYCLE: CheckState[] = ["", "check", "x", "na"];
-
-// Direct CP-panel points carry a raw "IP"/"OP" token in their point number
-// (from the source Access data) plus a separate Analog/Digital field; fold
-// the two into the single token techs actually use (AI/BI/AO/BO) instead of
-// showing them as separate columns. Zone-expanded points have no
-// analog_digital value (see mdbImport.ts) and pass through unchanged.
-function displayPointNumber(p: Point): string {
-  const ad = p.analog_digital.trim().toLowerCase();
-  const isAnalog = ad.startsWith("a");
-  const isDigital = ad.startsWith("d");
-  if (!isAnalog && !isDigital) return p.point_number;
-  if (p.point_number.includes("IP")) return p.point_number.replace("IP", isAnalog ? "AI" : "BI");
-  if (p.point_number.includes("OP")) return p.point_number.replace("OP", isAnalog ? "AO" : "BO");
-  return p.point_number;
-}
 
 function normalizeToken(raw: string): CheckState | null {
   const t = raw.trim().toLowerCase();
@@ -54,6 +40,8 @@ export function PointsView({
 
   const activePoints = useMemo(() => points.filter((p) => p.active), [points]);
   const removedCount = points.length - activePoints.length;
+  const checkedPoints = useMemo(() => activePoints.filter((p) => p.on_controller !== null), [activePoints]);
+  const onControllerCount = useMemo(() => checkedPoints.filter((p) => p.on_controller).length, [checkedPoints]);
   // Progress reflects the current design regardless of the toggle below —
   // a removed point shouldn't count toward (or against) completion just
   // because it's temporarily visible for review.
@@ -238,6 +226,11 @@ export function PointsView({
           {activePoints.length} point{activePoints.length === 1 ? "" : "s"} across{" "}
           {new Set(activePoints.map((p) => p.equipment_id)).size} equipment
         </span>
+        {checkedPoints.length > 0 && (
+          <span className="toolbar-label">
+            {onControllerCount} of {checkedPoints.length} confirmed on controller
+          </span>
+        )}
         <div className="spacer" />
         {removedCount > 0 && (
           <label className="toolbar-label" style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -292,8 +285,11 @@ export function PointsView({
                         <tr key={point.id} style={point.active ? undefined : { opacity: 0.55 }}>
                           <td className="checklist-sticky-col">{point.panel}</td>
                           <td className="mono">
-                            {displayPointNumber(point)}
+                            {resolvedPointNumber(point)}
                             {!point.active && <span className="muted-text"> (removed)</span>}
+                            {point.on_controller === false && (
+                              <span className="controller-missing-pill">Not on Controller</span>
+                            )}
                           </td>
                           <td className="truncate checklist-name-col" title={point.descriptor}>
                             {point.descriptor}

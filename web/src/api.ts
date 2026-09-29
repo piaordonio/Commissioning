@@ -93,6 +93,15 @@ export const api = {
     });
     if (error) throw new Error(error.message);
   },
+
+  // Persists the result of comparing design points against a controller
+  // export (see pointNumber.ts/controllerImport.ts for the client-side
+  // matching). One transaction (set_controller_status in supabase/schema.sql)
+  // so a large project's worth of flags land atomically.
+  setControllerStatus: async (updates: { id: string; on_controller: boolean }[]): Promise<void> => {
+    const { error } = await supabase.rpc("set_controller_status", { p_updates: updates });
+    if (error) throw new Error(error.message);
+  },
 };
 
 export interface ImportDiffPoint {

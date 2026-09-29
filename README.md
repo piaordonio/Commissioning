@@ -82,6 +82,47 @@ point_number and removes the now-redundant old row. Skippable — closing the
 screen without pairing anything is exactly the "point was actually removed"
 case, already handled correctly by default.
 
+## Checking design points against the controller
+
+The design list is what was *planned*; it's not necessarily what actually
+got programmed into the Delta controller during CX. **Check Against
+Controller** imports the "Points List" CSV exported from EnteliWEB
+(`Device, Object ID, Name, Sensor Type, Calibration, Flags`) and cross-
+checks it against the design points already tracked for the project —
+nothing is uploaded, the file is read and compared entirely in the
+browser.
+
+The match key is the point number in its resolved form (see below):
+EnteliWEB's `Object ID` (e.g. `20300.AI83`) already uses the same
+`AI`/`BI`/`AO`/`BO` form the grid displays. Every active point in the
+project is checked:
+
+- **Found on the controller**: no visible change — checked and confirmed.
+- **Not found on the controller**: a red "Not on Controller" pill appears
+  next to its point number in the grid. This is re-evaluated fresh on
+  every check, so a point that shows up on a later controller export
+  clears automatically — nothing is stuck permanently flagged.
+- **A controller object with no matching design point** (and, on the
+  other side, a design point not found on the controller) most often means
+  the point was renumbered on-site rather than actually missing. A
+  reconciliation screen shows both lists side by side; click one on each
+  side to pair them, which corrects the design point's number to match
+  what's really on the controller — its checklist progress is untouched.
+  Skippable, same as the re-import reconciliation above.
+
+## Displaying the point number: folding IP/OP and Analog/Digital together
+
+Direct CP-panel points carry a raw `IP`/`OP` token in their point number
+plus a separate Analog/Digital field, from the source Access data.
+`resolvedPointNumber()` (`web/src/pointNumber.ts`) folds the two into the
+token techs and the controller both actually use — `IP` + Analog -> `AI`,
+`IP` + Digital -> `BI`, `OP` + Analog -> `AO`, `OP` + Digital -> `BO` —
+display-only: the underlying `point_number`/`analog_digital` columns are
+never rewritten, since re-import and the controller check both match
+points by their stored `point_number`, and changing what that value *is*
+would break that matching for every point already imported. Zone-expanded
+points have no Analog/Digital value and pass through unchanged.
+
 ## Stack
 
 Vite + React + TypeScript, talking directly to [Supabase](https://supabase.com)
@@ -123,13 +164,14 @@ the client bundle regardless (it's public by design in Supabase's model).
 If this tool grows real user accounts, tightening these policies (e.g.
 scoping by project membership) is the first thing to do before that matters.
 
-### Why three operations are Postgres functions, not plain inserts/updates
+### Why four operations are Postgres functions, not plain inserts/updates
 
-`import_points()`, `bulk_set_points()`, and `pair_reimported_point()` (all
-in `supabase/schema.sql`) exist so an import, a checklist range-fill/paste,
-or a renumber-pairing is all-or-nothing — a Postgres function runs inside
-one transaction, so a failure partway through rolls back everything instead
-of leaving an import half-applied.
+`import_points()`, `bulk_set_points()`, `pair_reimported_point()`, and
+`set_controller_status()` (all in `supabase/schema.sql`) exist so an
+import, a checklist range-fill/paste, a renumber-pairing, or a controller
+check is all-or-nothing — a Postgres function runs inside one transaction,
+so a failure partway through rolls back everything instead of leaving an
+import half-applied.
 
 *(Verified against a real local PostgreSQL 16 instance from this
 environment — not a live Supabase project, since none was available here,
@@ -137,14 +179,18 @@ but the same Postgres engine Supabase runs on. Ran the full schema, then
 exercised realistic scenarios directly: a first import, a re-import with a
 point added/removed/renamed confirming matched points keep their checklist
 state and removed points go inactive rather than deleted, a whole equipment
-group disappearing, and a renumber pairing transferring progress and
-removing the old row. All behaved exactly as designed. What's NOT verified:
-the Supabase-specific pieces that only exist on their platform, not plain
-Postgres — the RLS policies' actual behavior under the `anon` role (that
-role doesn't exist on a local install, so the grants targeting it were
-skipped in this testing) and the Supabase-generated REST API surface
-`supabase-js` talks to. Try a real import against your own Supabase project
-before relying on this for a live job.)*
+group disappearing, a renumber pairing transferring progress and removing
+the old row, and — using the real Hell's Kitchen `.mdb` import and its real
+EnteliWEB controller export — a controller check flagging the right points
+matched/unmatched and a controller-reconciliation pairing correcting a
+point's number while leaving its checklist progress untouched. All behaved
+exactly as designed. What's NOT verified: the Supabase-specific pieces
+that only exist on their platform, not plain Postgres — the RLS policies'
+actual behavior under the `anon` role (that role doesn't exist on a local
+install, so the grants targeting it were skipped in this testing) and the
+Supabase-generated REST API surface `supabase-js` talks to. Try a real
+import against your own Supabase project before relying on this for a live
+job.)*
 
 ## Known gaps
 
@@ -162,6 +208,20 @@ before relying on this for a live job.)*
 - Analog/Digital isn't populated for zone-expanded points (the "Zone type
   points list T" table doesn't carry that column) — only direct CP-panel
   points have it.
+- **The IP/OP -> AI/BI/AO/BO fold is a string-replace heuristic.** It's
+  verified against a real Hell's Kitchen `.mdb` import and its real
+  EnteliWEB controller export side by side (see `web/src/pointNumber.ts`),
+  but it assumes a design point's raw `point_number` literally contains
+  `IP` or `OP` as a substring. If a site's naming convention doesn't, the
+  controller check will silently show every point as unmatched — a
+  near-zero match count on a real project is a sign to check that, not
+  proof the points are actually missing.
+- **The controller CSV parser** (`web/src/controllerImport.ts`) is tested
+  against the one real EnteliWEB export inspected while building this
+  feature, plus a hand-mutated fixture exercising a renumbered point. It
+  expects plain CSV with an "Object ID" header cell; a differently-shaped
+  export (extra columns, a re-saved `.xls`/`.xlsx` copy with banner rows)
+  hasn't been tried.
 - **Not tested against a live Supabase project** (see the RPC section
   above) — the schema and all three functions are verified against real
   PostgreSQL, but Supabase's own layer on top (RLS under the actual `anon`

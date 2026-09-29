@@ -60,6 +60,10 @@ create table if not exists points (
 alter table equipment add column if not exists active boolean not null default true;
 alter table points add column if not exists active boolean not null default true;
 
+-- null = never checked against a controller export yet, distinct from
+-- "checked and missing" (false). See set_controller_status() below.
+alter table points add column if not exists on_controller boolean;
+
 create index if not exists idx_equipment_project on equipment(project_id);
 create index if not exists idx_points_equipment on points(equipment_id);
 
@@ -291,6 +295,28 @@ begin
 end;
 $$;
 
+-- Sets points.on_controller from a client-computed comparison against an
+-- EnteliWEB controller-points export (see web/src/controllerImport.ts and
+-- web/src/pointNumber.ts for the parsing/matching, which happens client-
+-- side — this just persists the result). The client always sends every
+-- active point's status on each run, not only the ones that changed, so a
+-- point that was previously flagged missing self-corrects the next time
+-- the check runs against an updated controller export.
+create or replace function set_controller_status(p_updates jsonb)
+returns void
+language plpgsql
+as $$
+declare
+  v_item jsonb;
+begin
+  for v_item in select * from jsonb_array_elements(p_updates) loop
+    update points
+      set on_controller = (v_item->>'on_controller')::boolean
+      where id = (v_item->>'id')::uuid;
+  end loop;
+end;
+$$;
+
 -- ---- Row Level Security ----
 -- No auth system exists yet — this is a single-team internal tool, so RLS
 -- is enabled with explicit "anon can do everything" policies rather than
@@ -315,3 +341,4 @@ create policy "anon full access" on points for all using (true) with check (true
 grant execute on function import_points(uuid, jsonb, jsonb) to anon, authenticated;
 grant execute on function bulk_set_points(jsonb) to anon, authenticated;
 grant execute on function pair_reimported_point(uuid, uuid) to anon, authenticated;
+grant execute on function set_controller_status(jsonb) to anon, authenticated;

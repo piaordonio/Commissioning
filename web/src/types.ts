@@ -48,6 +48,9 @@ export type Point = {
   notes: string;
   blocked_by: string;
   active: boolean;
+  // null = never checked against a controller export; true/false = result
+  // of the last check. See set_controller_status() in supabase/schema.sql.
+  on_controller: boolean | null;
   created_at: string;
   updated_at: string;
 } & Record<CheckField, CheckState>;

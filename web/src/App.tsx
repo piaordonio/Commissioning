@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { api } from "./api";
 import { Modal } from "./components/Modal";
 import { ImportMdbModal } from "./components/ImportMdbModal";
+import { VerifyControllerModal } from "./components/VerifyControllerModal";
 import { PointsView } from "./views/PointsView";
 import { averageProgress } from "./progress";
 import { CheckField, CheckState, Equipment, Point, Project } from "./types";
@@ -14,6 +15,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
+  const [verifying, setVerifying] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -127,6 +129,9 @@ export default function App() {
         <button className="btn-danger" disabled={!projectId} onClick={() => setConfirmingDelete(true)}>
           Delete Project
         </button>
+        <button className="btn-secondary" disabled={!projectId} onClick={() => setVerifying(true)}>
+          Check Against Controller
+        </button>
         <button className="btn-primary" onClick={() => setImporting(true)}>
           Import Access Database
         </button>
@@ -164,6 +169,20 @@ export default function App() {
               {deleting ? "Deleting…" : "Delete Project"}
             </button>
           </div>
+        </Modal>
+      )}
+
+      {verifying && (
+        <Modal title="Check Against Controller" onClose={() => setVerifying(false)}>
+          <VerifyControllerModal
+            points={points}
+            equipment={equipment}
+            onCancel={() => setVerifying(false)}
+            onDone={async () => {
+              setVerifying(false);
+              await refreshProjectData(projectId);
+            }}
+          />
         </Modal>
       )}
 
