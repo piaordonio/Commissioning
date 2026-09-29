@@ -6,11 +6,13 @@ import { ControllerReconciliation } from "./ControllerReconciliation";
 import { Equipment, Point } from "../types";
 
 export function VerifyControllerModal({
+  projectId,
   points,
   equipment,
   onCancel,
   onDone,
 }: {
+  projectId: string;
   points: Point[];
   equipment: Equipment[];
   onCancel: () => void;
@@ -97,6 +99,8 @@ export function VerifyControllerModal({
   if (reconciliation) {
     return (
       <ControllerReconciliation
+        projectId={projectId}
+        equipment={equipment}
         unmatchedDesign={reconciliation.unmatchedDesign}
         unmatchedControllerRows={reconciliation.unmatchedControllerRows}
         onDone={onDone}

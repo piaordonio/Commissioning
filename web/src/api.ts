@@ -1,5 +1,7 @@
 import { supabase } from "./supabaseClient";
 import { ImportEquipmentDraft, ImportPointDraft } from "./mdbImport";
+import { ControllerPointRow } from "./controllerImport";
+import { Equipment, Point } from "./types";
 
 function assertNoError<T>(data: T | null, error: { message: string } | null): T {
   if (error) throw new Error(error.message);
@@ -41,7 +43,7 @@ export const api = {
   // `as any`: this client isn't wired to Supabase's generated Database types
   // (no schema codegen step for a project this size), so .insert()/.update()
   // have nothing to structurally check Partial<T> against.
-  create: async <T>(table: "projects" | "equipment", data: Partial<T>): Promise<T> => {
+  create: async <T>(table: "projects" | "equipment" | "points", data: Partial<T>): Promise<T> => {
     const { data: row, error } = await supabase.from(table).insert(data as any).select().single();
     return assertNoError(row as T | null, error);
   },
@@ -101,6 +103,37 @@ export const api = {
   setControllerStatus: async (updates: { id: string; on_controller: boolean }[]): Promise<void> => {
     const { error } = await supabase.rpc("set_controller_status", { p_updates: updates });
     if (error) throw new Error(error.message);
+  },
+
+  // For a controller object with no matching design point at all — a
+  // point added on-site (missed in the original design, or added during a
+  // long design-to-CX gap) rather than a renumbered one. Reuses equipment
+  // matching this device/tag if it's already in the project (e.g. other
+  // points on the same panel), otherwise creates it. No RPC: unlike a
+  // re-import, there's no existing progress this could clobber, so two
+  // plain inserts are enough.
+  addControllerObjectAsPoint: async (
+    projectId: string,
+    row: ControllerPointRow,
+    existingEquipment: Equipment[]
+  ): Promise<{ point: Point; equipment: Equipment }> => {
+    let equipment = existingEquipment.find((e) => e.tag === row.device);
+    if (!equipment) {
+      equipment = await api.create<Equipment>("equipment", {
+        project_id: projectId,
+        tag: row.device,
+        equipment_type: "cp_panel",
+      });
+    }
+    const point = await api.create<Point>("points", {
+      equipment_id: equipment.id,
+      panel: row.device,
+      point_number: row.object_id,
+      descriptor: row.name,
+      active: true,
+      on_controller: true,
+    });
+    return { point, equipment };
   },
 };
 

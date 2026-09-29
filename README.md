@@ -103,12 +103,22 @@ project is checked:
   every check, so a point that shows up on a later controller export
   clears automatically — nothing is stuck permanently flagged.
 - **A controller object with no matching design point** (and, on the
-  other side, a design point not found on the controller) most often means
-  the point was renumbered on-site rather than actually missing. A
-  reconciliation screen shows both lists side by side; click one on each
-  side to pair them, which corrects the design point's number to match
-  what's really on the controller — its checklist progress is untouched.
-  Skippable, same as the re-import reconciliation above.
+  other side, a design point not found on the controller) usually means
+  one of two things: the point was renumbered on-site, or it was genuinely
+  missed in the original design and only showed up once it got wired and
+  programmed — common on jobs where a lot of time passes between design
+  and commissioning. A reconciliation screen shows both lists side by
+  side:
+  - Click one on each side to **pair** them, which corrects the design
+    point's number to match what's really on the controller — its
+    checklist progress is untouched. Use this for a renumber.
+  - Click **Add as New Point** on a controller object to insert it as a
+    real design point instead — same equipment tag (creating the
+    equipment if this is its first point), blank checklist, confirmed on
+    the controller from the start. Use this when the point wasn't
+    designed at all, not just renumbered.
+  Both are skippable — closing without acting on an entry just leaves it
+  flagged for next time, same as the re-import reconciliation above.
 
 ## Displaying the point number: folding IP/OP and Analog/Digital together
 

@@ -198,6 +198,7 @@ export default function App() {
       {verifying && (
         <Modal title="Check Against Controller" onClose={() => setVerifying(false)}>
           <VerifyControllerModal
+            projectId={projectId}
             points={points}
             equipment={equipment}
             onCancel={() => setVerifying(false)}
