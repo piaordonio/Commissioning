@@ -91,8 +91,8 @@ export function PointsReport({
                   {CHECK_FIELD_LABELS[f]}
                 </th>
               ))}
-              <th>Notes</th>
-              <th>Blocked By</th>
+              <th className="report-col-notes">Notes</th>
+              <th className="report-col-blocked">Blocked By</th>
             </tr>
           </thead>
           <tbody>
@@ -120,8 +120,8 @@ export function PointsReport({
                           {SYMBOL[point[field]]}
                         </td>
                       ))}
-                      <td>{point.notes || "—"}</td>
-                      <td>{point.blocked_by || "—"}</td>
+                      <td className="report-col-notes">{point.notes || "—"}</td>
+                      <td className="report-col-blocked">{point.blocked_by || "—"}</td>
                     </tr>
                   ))}
                 </Fragment>

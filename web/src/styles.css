@@ -436,25 +436,60 @@ textarea {
   color: #166534;
 }
 
+/* Smaller font + tighter padding than the interactive grid: the report
+   has to fit a full checklist's worth of columns on one printed page
+   width (this was overflowing off the right edge in landscape before),
+   not just be comfortable to click around in on a screen. */
+.report-table {
+  font-size: 11px;
+}
+.report-table th,
+.report-table td {
+  padding: 5px 6px;
+}
+
 .report-table th.report-col-panel,
 .report-table td.report-col-panel {
-  width: 64px;
-  min-width: 64px;
-  max-width: 64px;
+  width: 48px;
+  min-width: 48px;
+  max-width: 48px;
 }
 
 .report-table th.report-col-point,
 .report-table td.report-col-point {
-  width: 100px;
-  min-width: 100px;
-  max-width: 100px;
+  width: 88px;
+  min-width: 88px;
+  max-width: 88px;
 }
 
 .report-table th.checklist-name-col,
 .report-table td.checklist-name-col {
-  width: 200px;
-  min-width: 200px;
-  max-width: 200px;
+  width: 160px;
+  min-width: 160px;
+  max-width: 160px;
+}
+
+.report-table th.report-col-notes,
+.report-table td.report-col-notes {
+  width: 90px;
+  min-width: 90px;
+  max-width: 90px;
+}
+
+.report-table th.report-col-blocked,
+.report-table td.report-col-blocked {
+  width: 80px;
+  min-width: 80px;
+  max-width: 80px;
+}
+
+.report-table th.checklist-item-header,
+.report-table td.checklist-cell {
+  width: 38px;
+  min-width: 38px;
+  max-width: 38px;
+  font-size: 10px;
+  padding: 4px 2px;
 }
 
 .report-header {
