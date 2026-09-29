@@ -5,9 +5,11 @@ import { ImportMdbModal } from "./components/ImportMdbModal";
 import { VerifyControllerModal } from "./components/VerifyControllerModal";
 import { PointsReport } from "./components/PointsReport";
 import { PointsView } from "./views/PointsView";
+import { PointsCardList } from "./views/PointsCardList";
 import { averageProgress } from "./progress";
 import { averageInstallProgress } from "./installProgress";
 import { resolvedPointNumber } from "./pointNumber";
+import { useIsNarrowViewport } from "./useIsNarrowViewport";
 import { CheckField, CheckState, Equipment, InstallCheck, InstallField, Point, Project } from "./types";
 
 export default function App() {
@@ -139,6 +141,7 @@ export default function App() {
     [activePoints, installChecksByPointId]
   );
   const currentProject = projects.find((p) => p.id === projectId);
+  const isNarrowViewport = useIsNarrowViewport(480);
 
   const deleteProject = async () => {
     if (!projectId) return;
@@ -199,6 +202,16 @@ export default function App() {
       <div className="app-main">
         {printing && currentProject ? (
           <PointsReport project={currentProject} equipment={equipment} points={points} onBack={() => setPrinting(false)} />
+        ) : isNarrowViewport ? (
+          <PointsCardList
+            points={points}
+            equipment={equipment}
+            installChecks={installChecks}
+            onSetValue={setPointValue}
+            onSetInstallValue={setInstallValue}
+            onUpdatePoint={updatePoint}
+            onDeletePoint={deletePoint}
+          />
         ) : (
           <PointsView
             points={points}

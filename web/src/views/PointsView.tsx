@@ -23,13 +23,12 @@ import {
 import { resolvedPointNumber, displayPanel } from "../pointNumber";
 import { autoFitColumnWidth } from "../textWidth";
 import { formatDateCommissioned } from "../formatDate";
+import { SYMBOL, nextCheckState } from "../checklistCycle";
+import { usePointRows } from "../usePointRows";
 
 const BODY_FONT = '13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
 const HEADER_FONT = '600 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
 const NOTES_FONT = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
-
-const SYMBOL: Record<CheckState, string> = { "": "", check: "✓", x: "✗", na: "N/A" };
-const CYCLE: CheckState[] = ["", "check", "x", "na"];
 
 function normalizeToken(raw: string): CheckState | null {
   const t = raw.trim().toLowerCase();
@@ -94,10 +93,13 @@ export function PointsView({
     [installChecks]
   );
 
-  const equipmentById = useMemo(() => Object.fromEntries(equipment.map((e) => [e.id, e])), [equipment]);
+  const { equipmentById, activePoints, removedCount, panelOptions, rows, groups } = usePointRows(
+    points,
+    equipment,
+    installChecksByPointId,
+    { showRemoved, panelFilter, statusFilter, installStatusFilter, search }
+  );
 
-  const activePoints = useMemo(() => points.filter((p) => p.active), [points]);
-  const removedCount = points.length - activePoints.length;
   const checkedPoints = useMemo(() => activePoints.filter((p) => p.on_controller !== null), [activePoints]);
   const onControllerCount = useMemo(() => checkedPoints.filter((p) => p.on_controller).length, [checkedPoints]);
   const statusCounts = useMemo(() => {
@@ -112,37 +114,6 @@ export function PointsView({
   const installProgressByEquipment = useMemo(
     () => buildInstallProgressByEquipment(activePoints, installChecksByPointId),
     [activePoints, installChecksByPointId]
-  );
-
-  const visiblePoints = showRemoved ? points : activePoints;
-
-  const panelOptions = useMemo(
-    () => Array.from(new Set(visiblePoints.map((p) => displayPanel(p.panel)))).sort((a, b) => a.localeCompare(b)),
-    [visiblePoints]
-  );
-
-  // One search box covers both a point type (typing "AI" matches every
-  // Analog Input, since the resolved point number already embeds that
-  // token) and free text anywhere in the descriptor.
-  const filteredPoints = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    return visiblePoints.filter((p) => {
-      if (panelFilter && displayPanel(p.panel) !== panelFilter) return false;
-      if (statusFilter && p.status !== statusFilter) return false;
-      if (installStatusFilter && installStatus(installChecksByPointId.get(p.id)) !== installStatusFilter) return false;
-      if (!query) return true;
-      return resolvedPointNumber(p).toLowerCase().includes(query) || p.descriptor.toLowerCase().includes(query);
-    });
-  }, [visiblePoints, panelFilter, statusFilter, installStatusFilter, installChecksByPointId, search]);
-
-  const rows = useMemo(
-    () =>
-      [...filteredPoints].sort((a, b) => {
-        const ta = equipmentById[a.equipment_id]?.tag ?? "";
-        const tb = equipmentById[b.equipment_id]?.tag ?? "";
-        return ta === tb ? a.point_number.localeCompare(b.point_number) : ta.localeCompare(tb);
-      }),
-    [filteredPoints, equipmentById]
   );
 
   const rowIndexById = useMemo(() => {
@@ -171,16 +142,6 @@ export function PointsView({
     () => autoFitColumnWidth(rows.map((p) => p.notes || "—"), "Notes", NOTES_FONT, HEADER_FONT),
     [rows]
   );
-
-  const groups = useMemo(() => {
-    const list: { equipmentId: string; items: Point[] }[] = [];
-    for (const p of rows) {
-      const last = list[list.length - 1];
-      if (last && last.equipmentId === p.equipment_id) last.items.push(p);
-      else list.push({ equipmentId: p.equipment_id, items: [p] });
-    }
-    return list;
-  }, [rows]);
 
   const getValue = (cell: Cell): CheckState => {
     if (cell.group === "commissioning") return rows[cell.r][CHECK_FIELDS[cell.c]];
@@ -218,8 +179,7 @@ export function PointsView({
   };
 
   const cycleCell = (cell: Cell) => {
-    const current = getValue(cell);
-    const next = CYCLE[(CYCLE.indexOf(current) + 1) % CYCLE.length];
+    const next = nextCheckState(getValue(cell));
     const pointId = rows[cell.r].id;
     if (cell.group === "commissioning") onSetValue(pointId, CHECK_FIELDS[cell.c], next);
     else onSetInstallValue(pointId, INSTALL_FIELDS[cell.c], next);

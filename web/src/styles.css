@@ -670,3 +670,197 @@ textarea {
   overflow: visible;
   flex-shrink: 0;
 }
+
+/* ---- Phone view (PointsCardList.tsx) ----
+   Auto-switches in below 480px (useIsNarrowViewport) -- a tablet in portrait
+   stays on the desktop grid; this is genuinely phone-only. One point per
+   card, tap-to-cycle, no selection/keyboard handling -- see the mobile-view
+   plan for why this is a separate component rather than responsive CSS on
+   the grid's <table>. */
+
+.mobile-view {
+  gap: 10px;
+}
+
+.mobile-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.mobile-toolbar select,
+.mobile-toolbar input[type="text"] {
+  width: 100%;
+  /* iOS Safari auto-zooms the page when focusing an input under 16px --
+     every mobile-view input/select stays at or above that floor. */
+  font-size: 16px;
+  padding: 10px 12px;
+}
+.mobile-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.mobile-card-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.mobile-equipment-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mobile-equipment-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  background: var(--accent);
+  color: white;
+  border-radius: var(--radius);
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.mobile-point-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mobile-point-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.mobile-point-title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 15px;
+}
+
+.mobile-point-descriptor {
+  font-size: 14px;
+  color: var(--text);
+}
+
+.mobile-point-status-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.mobile-field-group {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.mobile-field-group-label {
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.mobile-field-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: none;
+  border-top: 1px solid var(--border);
+  background: white;
+  font-size: 15px;
+  font-family: inherit;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+.mobile-field-group > .mobile-field-row:first-of-type {
+  border-top: none;
+}
+.mobile-field-row:active {
+  background: #f1f5f9;
+}
+.mobile-field-row-check {
+  background: #f0fdf4;
+}
+.mobile-field-row-x {
+  background: #fef2f2;
+}
+.mobile-field-row-na {
+  background: #f8fafc;
+}
+
+.mobile-field-value {
+  font-weight: 700;
+  font-size: 16px;
+}
+
+.mobile-text-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.mobile-input {
+  font-size: 16px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-family: inherit;
+  color: var(--text);
+}
+.mobile-input.checklist-blocked {
+  background: #fff7e0;
+  color: #7f5200;
+  font-weight: 600;
+}
+
+@media (max-width: 480px) {
+  .app-header {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .app-header .project-filter {
+    order: 1;
+    flex: 1 1 100%;
+  }
+  .app-header .progress-pill {
+    order: 2;
+  }
+  .app-header .spacer {
+    order: 3;
+    flex-basis: 100%;
+    height: 0;
+  }
+  .app-header button {
+    order: 4;
+    flex: 1 1 auto;
+  }
+}

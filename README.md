@@ -122,6 +122,32 @@ A few things worth knowing if you're touching this:
   instead), since pasting Install data onto Commissioning cells wouldn't
   mean anything.
 
+## A separate phone view for the field
+
+Opening this on a phone (viewport width ≤ 480px, checked live via
+`useIsNarrowViewport` — a tablet in portrait stays well above that and keeps
+the grid, only true phone widths switch) swaps the grid for
+`PointsCardList.tsx`: one point per card, fields stacked vertically instead
+of side-by-side, tap a field to cycle it the same ✓ / ✗ / N/A / blank order
+as the grid. No shift-select, no Ctrl/Cmd+C/V, no keyboard bulk-fill — the
+field workflow this was built for is single point at a time (walk up to a
+point, tap through its checks, move on), not a range operation, so there's
+nothing to invent a touch equivalent for. Cards still group under an
+equipment header with both weighted % pills, and the same Panel/Status/
+Install Status/search filters are there too, just stacked full-width instead
+of one toolbar row.
+
+It's a second view over the same data, not a responsive reflow of the
+grid's `<table>` — that table's `colSpan` tricks, sticky columns, and
+row/column-indexed selection state don't translate to a phone width via CSS
+alone, so this follows the same pattern `PointsReport.tsx` already
+established (a purpose-built view instead of overloading one component with
+a second job). The filtering/sorting/equipment-grouping logic
+(`usePointRows()` in `web/src/usePointRows.ts`) and the ✓/✗/N/A cycling
+order (`web/src/checklistCycle.ts`) are shared between the two views rather
+than duplicated, so both always show the same rows in the same order and
+cycle fields identically.
+
 ## Importing points from the Engtool Access database
 
 Rather than exporting to CSV and re-importing, this reads the `.mdb`/`.accdb`
