@@ -2,6 +2,11 @@ import { Fragment, useMemo, useRef, useState } from "react";
 import { CHECK_FIELDS, CHECK_FIELD_LABELS, CheckField, CheckState, Equipment, Point } from "../types";
 import { buildProgressByEquipment } from "../progress";
 import { resolvedPointNumber, displayPanel } from "../pointNumber";
+import { autoFitColumnWidth } from "../textWidth";
+
+const BODY_FONT = '13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
+const HEADER_FONT = '600 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
+const NOTES_FONT = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
 
 const SYMBOL: Record<CheckState, string> = { "": "", check: "✓", x: "✗", na: "N/A" };
 const CYCLE: CheckState[] = ["", "check", "x", "na"];
@@ -85,6 +90,27 @@ export function PointsView({
     rows.forEach((p, i) => map.set(p.id, i));
     return map;
   }, [rows]);
+
+  // Sized to fit exactly what's currently visible -- not a fixed guess --
+  // so these four columns take only as much room as their content needs
+  // instead of stretching to fill whatever's left in a wide window (the
+  // same failure mode the check columns and print report both had).
+  const panelColWidth = useMemo(
+    () => autoFitColumnWidth(rows.map((p) => displayPanel(p.panel)), "Panel", BODY_FONT, HEADER_FONT),
+    [rows]
+  );
+  const pointColWidth = useMemo(
+    () => autoFitColumnWidth(rows.map((p) => resolvedPointNumber(p)), "Point #", BODY_FONT, HEADER_FONT),
+    [rows]
+  );
+  const descColWidth = useMemo(
+    () => autoFitColumnWidth(rows.map((p) => p.descriptor), "Descriptor", BODY_FONT, HEADER_FONT),
+    [rows]
+  );
+  const notesColWidth = useMemo(
+    () => autoFitColumnWidth(rows.map((p) => p.notes || "—"), "Notes", NOTES_FONT, HEADER_FONT),
+    [rows]
+  );
 
   const groups = useMemo(() => {
     const list: { equipmentId: string; items: Point[] }[] = [];
@@ -304,15 +330,17 @@ export function PointsView({
           <table className="data-table checklist-table">
             <thead>
               <tr>
-                <th className="checklist-sticky-col">Panel</th>
-                <th>Point #</th>
-                <th>Descriptor</th>
+                <th className="checklist-sticky-col" style={{ width: panelColWidth }}>
+                  Panel
+                </th>
+                <th style={{ width: pointColWidth }}>Point #</th>
+                <th style={{ width: descColWidth }}>Descriptor</th>
                 {CHECK_FIELDS.map((f) => (
                   <th key={f} className="checklist-item-header">
                     {CHECK_FIELD_LABELS[f]}
                   </th>
                 ))}
-                <th>Notes</th>
+                <th style={{ width: notesColWidth }}>Notes</th>
                 <th>Blocked By</th>
                 <th>Controller</th>
                 <th></th>
@@ -341,9 +369,7 @@ export function PointsView({
                             {resolvedPointNumber(point)}
                             {!point.active && <span className="muted-text"> (removed)</span>}
                           </td>
-                          <td className="truncate checklist-name-col" title={point.descriptor}>
-                            {point.descriptor}
-                          </td>
+                          <td>{point.descriptor}</td>
                           {CHECK_FIELDS.map((field, c) => {
                             const v = point[field];
                             return (
@@ -358,7 +384,7 @@ export function PointsView({
                               </td>
                             );
                           })}
-                          <td className="checklist-text-col">
+                          <td className="checklist-text-col checklist-notes-col">
                             <input
                               key={`${point.id}-notes`}
                               className="checklist-inline-input"

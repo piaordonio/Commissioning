@@ -383,8 +383,16 @@ textarea {
   padding: 0 !important;
 }
 
+/* The Notes column gets an exact auto-fit width from PointsView.tsx
+   (measured against the visible rows) -- this floor would otherwise
+   force it wider than that whenever notes are short or empty. */
+.checklist-text-col.checklist-notes-col {
+  min-width: 0;
+}
+
 .checklist-inline-input {
   width: 100%;
+  min-width: 0;
   height: 100%;
   border: none;
   background: transparent;
