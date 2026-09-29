@@ -74,6 +74,16 @@ already in the project, rather than always inserting.
 - Equipment gets the same treatment — a whole zone renamed or removed goes
   inactive along with its points, rather than silently losing everything
   under it.
+- **Points with no point number at all** (a hardwired/interlocked device
+  with no discrete I/O address, e.g. an aquastat wired straight to a
+  valve — legitimate in the source `.mdb`, not a parsing gap) match by
+  `descriptor` instead, since a blank `point_number` isn't a safe key on
+  its own: two such points under the same equipment used to collide,
+  silently overwriting one with the other's descriptor and coming up one
+  point short with no error. Confirmed against a real bug report — a job
+  with two hardwired aquastats (`..._IFP1_AQSTAT` and `..._IFP2_AQSTAT`)
+  under the same panel, both blank point numbers, where only one survived
+  import.
 
 **Renumbering** (a point's number changed, not truly removed) looks
 identical to "removed + unrelated new point added" from the matching logic

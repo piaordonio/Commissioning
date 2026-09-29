@@ -174,9 +174,26 @@ begin
       continue; -- defensive: a point referencing an equipment tempId that was never in p_equipment
     end if;
 
-    select id into v_existing_id from points
-      where equipment_id = v_equipment_id and point_number = v_item->>'point_number'
-      limit 1;
+    -- A blank point_number isn't a safe matching key on its own: some
+    -- source rows (hardwired/interlocked devices with no discrete I/O
+    -- address, e.g. an aquastat wired straight to a valve) legitimately
+    -- have no point number at all, and more than one can share that same
+    -- blank value under one equipment. Matching purely on point_number
+    -- would collapse them into a single row -- whichever was processed
+    -- last would silently overwrite the other's descriptor, and the
+    -- import would come up one point short with no error. Descriptor
+    -- disambiguates them when point_number is empty; a non-empty
+    -- point_number is still the sole key, as it's the real natural one.
+    if coalesce(v_item->>'point_number', '') = '' then
+      select id into v_existing_id from points
+        where equipment_id = v_equipment_id and point_number = ''
+          and descriptor = coalesce(v_item->>'descriptor', '')
+        limit 1;
+    else
+      select id into v_existing_id from points
+        where equipment_id = v_equipment_id and point_number = v_item->>'point_number'
+        limit 1;
+    end if;
 
     if v_existing_id is not null then
       update points
