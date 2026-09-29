@@ -116,7 +116,11 @@ project is checked:
     real design point instead — same equipment tag (creating the
     equipment if this is its first point), blank checklist, confirmed on
     the controller from the start. Use this when the point wasn't
-    designed at all, not just renumbered.
+    designed at all, not just renumbered. It gets a green "Added from
+    Controller" pill next to its point number in the grid — permanent
+    provenance, not re-evaluated by later checks the way the red pill is,
+    so it stays even if a future check can't find that point (it can
+    appear alongside the red pill if that happens).
   Both are skippable — closing without acting on an entry just leaves it
   flagged for next time, same as the re-import reconciliation above.
 

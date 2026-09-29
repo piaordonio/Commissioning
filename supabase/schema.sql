@@ -64,6 +64,13 @@ alter table points add column if not exists active boolean not null default true
 -- "checked and missing" (false). See set_controller_status() below.
 alter table points add column if not exists on_controller boolean;
 
+-- true only for a point created via "Add as New Point" (see
+-- addControllerObjectAsPoint in web/src/api.ts) -- a point found on the
+-- controller with nothing matching it in the design. Provenance, not a
+-- live check result: unlike on_controller, this is set once at insert and
+-- never recomputed by set_controller_status() or a later re-import.
+alter table points add column if not exists added_from_controller boolean not null default false;
+
 create index if not exists idx_equipment_project on equipment(project_id);
 create index if not exists idx_points_equipment on points(equipment_id);
 

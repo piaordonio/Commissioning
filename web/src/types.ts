@@ -51,6 +51,9 @@ export type Point = {
   // null = never checked against a controller export; true/false = result
   // of the last check. See set_controller_status() in supabase/schema.sql.
   on_controller: boolean | null;
+  // true only for a point created via "Add as New Point" -- provenance,
+  // never recomputed by a later check or re-import.
+  added_from_controller: boolean;
   created_at: string;
   updated_at: string;
 } & Record<CheckField, CheckState>;

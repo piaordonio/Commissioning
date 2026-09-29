@@ -335,6 +335,9 @@ export function PointsView({
                             {point.on_controller === false && (
                               <span className="controller-missing-pill">Not on Controller</span>
                             )}
+                            {point.added_from_controller && (
+                              <span className="controller-added-pill">Added from Controller</span>
+                            )}
                           </td>
                           <td>
                             <button

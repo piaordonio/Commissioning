@@ -132,6 +132,7 @@ export const api = {
       descriptor: row.name,
       active: true,
       on_controller: true,
+      added_from_controller: true,
     });
     return { point, equipment };
   },
