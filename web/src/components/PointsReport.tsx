@@ -93,7 +93,7 @@ export function PointsReport({
                   {g.items.map((point) => (
                     <tr key={point.id}>
                       <td>{point.panel}</td>
-                      <td className="mono">{resolvedPointNumber(point)}</td>
+                      <td>{resolvedPointNumber(point)}</td>
                       <td className="truncate checklist-name-col" title={point.descriptor}>
                         {point.descriptor}
                       </td>

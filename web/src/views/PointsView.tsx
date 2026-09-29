@@ -288,7 +288,7 @@ export function PointsView({
                       return (
                         <tr key={point.id} style={point.active ? undefined : { opacity: 0.55 }}>
                           <td className="checklist-sticky-col">{point.panel}</td>
-                          <td className="mono">
+                          <td>
                             {resolvedPointNumber(point)}
                             {!point.active && <span className="muted-text"> (removed)</span>}
                           </td>
