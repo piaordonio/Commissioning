@@ -18,3 +18,14 @@ export function resolvedPointNumber(p: Pick<Point, "point_number" | "analog_digi
   if (p.point_number.includes("OP")) return p.point_number.replace("OP", isAnalog ? "AO" : "BO");
   return p.point_number;
 }
+
+// Some source designs split one physical CP panel's points across multiple
+// "Points List T" groupings, distinguished only by a trailing ".1" / ".2" on
+// the panel number (e.g. "20300.1", "20300.2") -- useful for keeping the
+// design source organized, but just noise once it's on a checklist next to
+// the actual point number. Display-only, same reasoning as
+// resolvedPointNumber: the underlying panel/tag values are left untouched
+// since matching and grouping still rely on them being distinct.
+export function displayPanel(panel: string): string {
+  return panel.replace(/\.\d+$/, "");
+}

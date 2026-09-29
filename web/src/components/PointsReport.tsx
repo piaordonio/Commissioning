@@ -1,7 +1,7 @@
 import { Fragment, useMemo } from "react";
 import { CHECK_FIELDS, CHECK_FIELD_LABELS, CheckState, Equipment, Point, Project } from "../types";
 import { buildProgressByEquipment, averageProgress } from "../progress";
-import { resolvedPointNumber } from "../pointNumber";
+import { resolvedPointNumber, displayPanel } from "../pointNumber";
 
 const SYMBOL: Record<CheckState, string> = { "": "", check: "✓", x: "✗", na: "N/A" };
 
@@ -92,7 +92,7 @@ export function PointsReport({
                   </tr>
                   {g.items.map((point) => (
                     <tr key={point.id}>
-                      <td>{point.panel}</td>
+                      <td>{displayPanel(point.panel)}</td>
                       <td>{resolvedPointNumber(point)}</td>
                       <td className="truncate checklist-name-col" title={point.descriptor}>
                         {point.descriptor}

@@ -1,7 +1,7 @@
 import { Fragment, useMemo, useRef, useState } from "react";
 import { CHECK_FIELDS, CHECK_FIELD_LABELS, CheckField, CheckState, Equipment, Point } from "../types";
 import { buildProgressByEquipment } from "../progress";
-import { resolvedPointNumber } from "../pointNumber";
+import { resolvedPointNumber, displayPanel } from "../pointNumber";
 
 const SYMBOL: Record<CheckState, string> = { "": "", check: "✓", x: "✗", na: "N/A" };
 const CYCLE: CheckState[] = ["", "check", "x", "na"];
@@ -287,7 +287,7 @@ export function PointsView({
                       const r = rowIndexById.get(point.id)!;
                       return (
                         <tr key={point.id} style={point.active ? undefined : { opacity: 0.55 }}>
-                          <td className="checklist-sticky-col">{point.panel}</td>
+                          <td className="checklist-sticky-col">{displayPanel(point.panel)}</td>
                           <td>
                             {resolvedPointNumber(point)}
                             {!point.active && <span className="muted-text"> (removed)</span>}
