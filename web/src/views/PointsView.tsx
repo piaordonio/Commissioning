@@ -150,6 +150,13 @@ export function PointsView({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    // Notes/Blocked By are plain <input>s inside this same container, so
+    // their keydown events bubble up here too -- without this guard,
+    // typing c/x/n/0, Backspace/Delete, arrow keys, or Ctrl+C/V into them
+    // gets hijacked as a checklist-grid shortcut instead of editing the
+    // text (e.g. Backspace calling preventDefault() and clearing the
+    // selected cell range instead of deleting a character).
+    if ((e.target as HTMLElement).tagName === "INPUT") return;
     if (!anchor || !focus) return;
     const mod = e.ctrlKey || e.metaKey;
 
