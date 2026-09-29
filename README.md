@@ -137,6 +137,26 @@ points by their stored `point_number`, and changing what that value *is*
 would break that matching for every point already imported. Zone-expanded
 points have no Analog/Digital value and pass through unchanged.
 
+## Printing a handoff report
+
+**Print Report** swaps the interactive grid for `PointsReport.tsx` — a
+clean, read-only view built to print or save as a PDF, not the working
+grid with a stylesheet grafted on: no Controller or delete columns, and
+Notes/Blocked By render as plain text instead of inputs. Always shows
+active points only, regardless of the grid's "show removed" toggle.
+
+Header carries an Ainsworth letterhead (`web/public/ainsworth-logo.jpg`),
+the generation date, points/percent complete, and a "Commissioned By"
+field you type in right before printing (local to that print session,
+not saved to the project — it's who ran *this* check, not project data).
+
+Two print-specific fixes worth knowing about if you touch this file:
+browsers don't print background colors by default, so the blue equipment
+group-header rows need an explicit `print-color-adjust: exact` or they
+render as blank white bars; and the page margin is set via `@page` in
+`styles.css`, not container padding, since print mode strips that padding
+anyway.
+
 ## Stack
 
 Vite + React + TypeScript, talking directly to [Supabase](https://supabase.com)

@@ -1,4 +1,4 @@
-import { Fragment, useMemo } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { CHECK_FIELDS, CHECK_FIELD_LABELS, CheckState, Equipment, Point, Project } from "../types";
 import { buildProgressByEquipment, averageProgress } from "../progress";
 import { resolvedPointNumber, displayPanel } from "../pointNumber";
@@ -22,6 +22,7 @@ export function PointsReport({
   points: Point[];
   onBack: () => void;
 }) {
+  const [commissionedBy, setCommissionedBy] = useState("");
   const activePoints = useMemo(() => points.filter((p) => p.active), [points]);
   const equipmentById = useMemo(() => Object.fromEntries(equipment.map((e) => [e.id, e])), [equipment]);
   const progressByEquipment = useMemo(() => buildProgressByEquipment(activePoints), [activePoints]);
@@ -49,15 +50,32 @@ export function PointsReport({
           ← Back to Grid
         </button>
         <div className="spacer" />
+        <label className="toolbar-label" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          Commissioned By
+          <input value={commissionedBy} onChange={(e) => setCommissionedBy(e.target.value)} placeholder="Name" />
+        </label>
         <button type="button" className="btn-primary" onClick={() => window.print()}>
           Print
         </button>
       </div>
 
       <div className="report-header">
-        <h2>{project.project_number ? `${project.project_number} — ${project.name}` : project.name}</h2>
-        <div className="muted-text">
-          Generated {new Date().toLocaleDateString()} — {activePoints.length} points, {overallPct}% complete
+        <div className="report-title-row">
+          <img className="report-logo" src="/ainsworth-logo.jpg" alt="Ainsworth" />
+          <h2>{project.project_number ? `${project.project_number} — ${project.name}` : project.name}</h2>
+        </div>
+        <div className="report-meta-bar">
+          <span>
+            Generated{" "}
+            {new Date().toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })}
+          </span>
+          <span>
+            {activePoints.length} points, {overallPct}% complete
+          </span>
+          <span>
+            Commissioned By:{" "}
+            {commissionedBy ? commissionedBy : <span className="signoff-blank">{" ".repeat(20)}</span>}
+          </span>
         </div>
       </div>
 

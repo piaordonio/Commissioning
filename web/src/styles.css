@@ -325,12 +325,13 @@ textarea {
   z-index: 1;
 }
 
-.checklist-item-header {
+.data-table th.checklist-item-header {
   text-align: center;
-  min-width: 52px;
-  max-width: 60px;
-  padding: 8px 4px;
+  min-width: 40px;
+  max-width: 46px;
+  padding: 6px 2px;
   white-space: normal;
+  overflow-wrap: break-word;
   line-height: 1.2;
   border-left: 1px solid var(--border);
 }
@@ -344,9 +345,9 @@ textarea {
   cursor: pointer;
   border-left: 1px solid var(--border);
   font-weight: 700;
-  min-width: 52px;
-  max-width: 60px;
-  padding: 9px 4px;
+  min-width: 40px;
+  max-width: 46px;
+  padding: 9px 2px;
 }
 
 .checklist-cell:hover {
@@ -426,8 +427,41 @@ textarea {
 .report-header {
   padding: 4px 0;
 }
-.report-header h2 {
-  margin: 0 0 4px;
+
+.report-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.report-logo {
+  height: 22px;
+  width: auto;
+}
+.report-title-row h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.report-meta-bar {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 12px;
+  color: var(--text-muted);
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px 12px;
+  margin-top: 8px;
+}
+
+.signoff-blank {
+  display: inline-block;
+  border-bottom: 1px solid var(--text-muted);
+}
+
+@page {
+  margin: 0.6in;
 }
 
 @media print {
@@ -439,7 +473,15 @@ textarea {
   }
   .app-main {
     overflow: visible;
-    padding: 0;
+    padding: 12px 0 0;
+  }
+  .table-group-header td,
+  .count-pill,
+  .progress-pill,
+  .controller-missing-pill,
+  .controller-added-pill {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
   }
   .table-group-header {
     break-inside: avoid;
