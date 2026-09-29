@@ -1,5 +1,14 @@
 import { Fragment, useMemo, useState } from "react";
-import { CHECK_FIELDS, CHECK_FIELD_LABELS, CheckState, Equipment, Point, POINT_STATUS_LABELS, Project } from "../types";
+import {
+  CHECK_FIELDS,
+  CHECK_FIELD_LABELS,
+  CheckState,
+  Equipment,
+  Point,
+  POINT_STATUS_LABELS,
+  PointStatus,
+  Project,
+} from "../types";
 import { buildProgressByEquipment, averageProgress } from "../progress";
 import { resolvedPointNumber, displayPanel } from "../pointNumber";
 import { formatDateCommissioned } from "../formatDate";
@@ -51,13 +60,24 @@ export function PointsReport({
   const [commissionedBy, setCommissionedBy] = useState("");
   const [commissionedByNames, setCommissionedByNames] = useState<string[]>(() => loadCommissionedByNames());
   const [hideDateCommissioned, setHideDateCommissioned] = useState(false);
+  // Defaults to showing everything; a manager wanting "what's remaining"
+  // unchecks Commissioned and prints just the open rows. Progress pills
+  // still reflect every active point regardless of this filter -- it only
+  // controls which rows are listed, not what "done" means for a panel.
+  const [statusFilter, setStatusFilter] = useState<Record<PointStatus, boolean>>({
+    not_started: true,
+    in_progress: true,
+    commissioned: true,
+  });
   const activePoints = useMemo(() => points.filter((p) => p.active), [points]);
+  const visiblePoints = useMemo(() => activePoints.filter((p) => statusFilter[p.status]), [activePoints, statusFilter]);
+  const statusFilterActive = !statusFilter.not_started || !statusFilter.in_progress || !statusFilter.commissioned;
   const equipmentById = useMemo(() => Object.fromEntries(equipment.map((e) => [e.id, e])), [equipment]);
   const progressByEquipment = useMemo(() => buildProgressByEquipment(activePoints), [activePoints]);
   const overallPct = Math.round(averageProgress(activePoints) * 100);
 
   const groups = useMemo(() => {
-    const sorted = [...activePoints].sort((a, b) => {
+    const sorted = [...visiblePoints].sort((a, b) => {
       const ta = equipmentById[a.equipment_id]?.tag ?? "";
       const tb = equipmentById[b.equipment_id]?.tag ?? "";
       return ta === tb ? a.point_number.localeCompare(b.point_number) : ta.localeCompare(tb);
@@ -69,7 +89,7 @@ export function PointsReport({
       else list.push({ equipmentId: p.equipment_id, items: [p] });
     }
     return list;
-  }, [activePoints, equipmentById]);
+  }, [visiblePoints, equipmentById]);
 
   return (
     <div className="view">
@@ -77,6 +97,19 @@ export function PointsReport({
         <button type="button" className="btn-secondary" onClick={onBack}>
           ← Back to Grid
         </button>
+        <div className="toolbar-label" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span>Status</span>
+          {(Object.keys(POINT_STATUS_LABELS) as PointStatus[]).map((s) => (
+            <label key={s} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <input
+                type="checkbox"
+                checked={statusFilter[s]}
+                onChange={(e) => setStatusFilter((prev) => ({ ...prev, [s]: e.target.checked }))}
+              />
+              {POINT_STATUS_LABELS[s]}
+            </label>
+          ))}
+        </div>
         <label className="toolbar-label" style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <input
             type="checkbox"
@@ -130,7 +163,8 @@ export function PointsReport({
             {new Date().toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })}
           </span>
           <span>
-            {activePoints.length} points, {overallPct}% complete
+            {statusFilterActive ? `${visiblePoints.length} of ${activePoints.length} points shown` : `${activePoints.length} points`},{" "}
+            {overallPct}% complete
           </span>
           <span>
             Commissioned By:{" "}
@@ -139,6 +173,9 @@ export function PointsReport({
         </div>
       </div>
 
+      {groups.length === 0 ? (
+        <div className="empty-state">No points match the selected status filter.</div>
+      ) : (
       <div className="table-wrap report-table-wrap">
         <table className="data-table report-table">
           <thead>
@@ -208,6 +245,7 @@ export function PointsReport({
           </tbody>
         </table>
       </div>
+      )}
     </div>
   );
 }

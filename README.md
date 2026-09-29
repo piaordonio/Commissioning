@@ -191,6 +191,17 @@ project data shared across techs). A "Hide Date Commissioned column"
 checkbox in the toolbar drops that column from the printed table when a
 handoff doesn't need it — neither control prints itself (`no-print`).
 
+A **Status** filter (three checkboxes: Not Started / In Progress /
+Commissioned, all checked by default) controls which rows print — the
+main use case is a manager handoff of what's still open: uncheck
+Commissioned and the report becomes a punch list of exactly what's
+remaining. Filtering only removes rows; each equipment group's progress
+pill still reflects that panel's true completion across all its active
+points (not just the ones currently shown), and a panel that's fully
+filtered out (e.g. 100% Commissioned while only Not Started/In Progress
+are checked) drops out of the report entirely instead of printing an
+empty group header.
+
 Each equipment group's progress pill reads its color off the same
 percentage the grid shows: green above 90%, red below 10%, the default
 indigo in between — a quick visual scan across a long panel list.
