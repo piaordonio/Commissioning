@@ -17,11 +17,12 @@ export function IssuesModal({
   point: Point;
   equipmentTag: string;
   issues: Issue[];
-  onAdd: (pointId: string, description: string, recommendedAction: string) => void;
+  onAdd: (pointId: string, description: string, recommendedAction: string, notes: string) => void;
   onSetStatus: (issueId: string, status: IssueStatus) => void;
 }) {
   const [description, setDescription] = useState("");
   const [recommendedAction, setRecommendedAction] = useState("");
+  const [notes, setNotes] = useState("");
 
   const sorted = [...issues].sort((a, b) => {
     if (a.status !== b.status) return a.status === "open" ? -1 : 1;
@@ -37,9 +38,10 @@ export function IssuesModal({
         onSubmit={(e) => {
           e.preventDefault();
           if (!description.trim()) return;
-          onAdd(point.id, description.trim(), recommendedAction.trim());
+          onAdd(point.id, description.trim(), recommendedAction.trim(), notes.trim());
           setDescription("");
           setRecommendedAction("");
+          setNotes("");
         }}
       >
         <label>
@@ -58,6 +60,15 @@ export function IssuesModal({
             value={recommendedAction}
             onChange={(e) => setRecommendedAction(e.target.value)}
             placeholder="What needs to happen to fix it?"
+            rows={2}
+          />
+        </label>
+        <label>
+          Notes (report only)
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Only shown on the printed Issues report, not here or on the Dashboard"
             rows={2}
           />
         </label>

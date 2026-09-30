@@ -133,6 +133,13 @@ create table if not exists issues (
   updated_at timestamptz not null default now()
 );
 
+-- Idempotent for anyone who already ran an earlier version of this file
+-- before this column existed -- report-only notes, meant for the printed
+-- Issues report handoff document rather than the interactive issue log
+-- (the modal, the Dashboard), so the compact on-screen views don't grow a
+-- second block of free text nobody needs while working a point.
+alter table issues add column if not exists notes text not null default '';
+
 create index if not exists idx_equipment_project on equipment(project_id);
 create index if not exists idx_points_equipment on points(equipment_id);
 create index if not exists idx_install_checks_point on install_checks(point_id);

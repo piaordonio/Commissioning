@@ -176,12 +176,13 @@ export default function App() {
   // client-side temp-id convention (every api.create call site, e.g.
   // addControllerObjectAsPoint, awaits the real row first), so this waits
   // for the created row too rather than inventing one.
-  const addIssue = async (pointId: string, description: string, recommendedAction: string) => {
+  const addIssue = async (pointId: string, description: string, recommendedAction: string, notes: string) => {
     try {
       const created = await api.create<Issue>("issues", {
         point_id: pointId,
         description,
         recommended_action: recommendedAction,
+        notes,
       });
       setIssues((list) => [...list, created]);
     } catch (err: any) {

@@ -147,6 +147,12 @@ export interface Issue {
   point_id: string;
   description: string;
   recommended_action: string;
+  // Report-only: entered alongside description/recommended_action when the
+  // issue is logged, but only ever displayed in PointsReport.tsx's Issues
+  // mode -- the interactive issue log (IssuesModal, Dashboard) never shows
+  // it, so this stays a place for handoff-document context without
+  // cluttering the on-screen views a tech checks while working a point.
+  notes: string;
   status: IssueStatus;
   created_at: string;
   updated_at: string;
