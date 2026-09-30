@@ -272,6 +272,7 @@ export default function App() {
             equipment={equipment}
             points={points}
             issues={issues}
+            onOpenIssues={(point) => setIssuesModalPointId(point.id)}
             onBack={() => setPrinting(false)}
           />
         ) : showDashboard ? (

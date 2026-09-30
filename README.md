@@ -413,7 +413,12 @@ open issues only — the report you'd actually hand to a subcontractor —
 with an "Include closed issues" checkbox to pull resolved ones back in for
 a closeout record. This is a mode on the existing report rather than a
 second print flow, since both need the same project data and print CSS and
-neither needed its own screen.
+neither needed its own screen. Each row has a screen-only "✎" button
+(`no-print`, so it never shows up on an actual printout) opening that
+point's issue log in the same modal the grid and Dashboard use — a punch
+list is often the moment you notice something needs a status update or a
+follow-up note, so fixing it shouldn't mean leaving the report to hunt the
+point down in the grid.
 
 ## Stack
 

@@ -54,12 +54,14 @@ export function PointsReport({
   equipment,
   points,
   issues,
+  onOpenIssues,
   onBack,
 }: {
   project: Project;
   equipment: Equipment[];
   points: Point[];
   issues: Issue[];
+  onOpenIssues: (point: Point) => void;
   onBack: () => void;
 }) {
   // "Checklist" is the handoff document this view has always been; "Issues"
@@ -351,6 +353,7 @@ export function PointsReport({
                 <th className="report-col-issue-desc">Recommended Action</th>
                 <th className="report-col-status divider-left">Status</th>
                 <th className="report-col-date divider-left">Date Created</th>
+                <th className="no-print"></th>
               </tr>
             </thead>
             <tbody>
@@ -359,7 +362,7 @@ export function PointsReport({
                 return (
                   <Fragment key={g.equipmentId}>
                     <tr className="table-group-header">
-                      <td colSpan={7}>
+                      <td colSpan={8}>
                         {eq?.tag ?? g.equipmentId}
                         {eq?.location ? ` — ${eq.location}` : ""}{" "}
                         <span className="issue-count-pill">
@@ -382,6 +385,17 @@ export function PointsReport({
                           </span>
                         </td>
                         <td className="report-col-date divider-left">{formatTimestamp(issue.created_at)}</td>
+                        <td className="no-print">
+                          <button
+                            type="button"
+                            className="icon-btn"
+                            title="Edit this point's issue log"
+                            aria-label="Edit issue log"
+                            onClick={() => onOpenIssues(point)}
+                          >
+                            ✎
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </Fragment>
