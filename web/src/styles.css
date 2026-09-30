@@ -682,6 +682,11 @@ textarea {
   gap: 10px;
 }
 
+.mobile-filters-toggle {
+  align-self: stretch;
+  text-align: center;
+}
+
 .mobile-toolbar {
   display: flex;
   flex-direction: column;

@@ -57,6 +57,10 @@ export function PointsCardList({
   const [search, setSearch] = useState("");
   const [showInstall, setShowInstall] = useState(true);
   const [showCommissioning, setShowCommissioning] = useState(true);
+  // Collapsed by default, same reasoning as the header's Actions toggle and
+  // each point card -- the filters aren't needed to check off a point
+  // you've already found, only to narrow the list down to it.
+  const [showFilters, setShowFilters] = useState(false);
   // Collapsed by default, same reasoning as the header's Actions toggle --
   // with many points on a job, showing just name + status flags per card
   // lets you scan the list quickly and expand only the one you're actually
@@ -99,64 +103,77 @@ export function PointsCardList({
     onSetValue(point.id, field, nextCheckState(point[field]));
   };
 
+  const activeFilterCount = [panelFilter, statusFilter, installStatusFilter, search].filter(Boolean).length;
+
   return (
     <div className="view mobile-view">
-      <div className="mobile-toolbar">
-        <div className="mobile-columns-toggle">
-          <span>Columns</span>
-          <label className="mobile-checkbox-row">
-            <input type="checkbox" checked={showInstall} onChange={(e) => setShowInstall(e.target.checked)} />
-            Install
-          </label>
-          <label className="mobile-checkbox-row">
-            <input
-              type="checkbox"
-              checked={showCommissioning}
-              onChange={(e) => setShowCommissioning(e.target.checked)}
-            />
-            Commissioning
-          </label>
+      <button
+        type="button"
+        className="btn-secondary mobile-filters-toggle"
+        onClick={() => setShowFilters((v) => !v)}
+      >
+        {showFilters
+          ? "Hide Filters ▲"
+          : `Filters${activeFilterCount > 0 ? ` (${activeFilterCount})` : ""} ▾`}
+      </button>
+      {showFilters && (
+        <div className="mobile-toolbar">
+          <div className="mobile-columns-toggle">
+            <span>Columns</span>
+            <label className="mobile-checkbox-row">
+              <input type="checkbox" checked={showInstall} onChange={(e) => setShowInstall(e.target.checked)} />
+              Install
+            </label>
+            <label className="mobile-checkbox-row">
+              <input
+                type="checkbox"
+                checked={showCommissioning}
+                onChange={(e) => setShowCommissioning(e.target.checked)}
+              />
+              Commissioning
+            </label>
+          </div>
+          <select value={panelFilter} onChange={(e) => setPanelFilter(e.target.value)}>
+            <option value="">All Panels</option>
+            {panelOptions.map((p) => (
+              <option key={p} value={p}>
+                {p}
+              </option>
+            ))}
+          </select>
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as PointStatus | "")}>
+            <option value="">All Cx Status</option>
+            {(Object.keys(POINT_STATUS_LABELS) as PointStatus[]).map((s) => (
+              <option key={s} value={s}>
+                {POINT_STATUS_LABELS[s]}
+              </option>
+            ))}
+          </select>
+          <select
+            value={installStatusFilter}
+            onChange={(e) => setInstallStatusFilter(e.target.value as InstallStatus | "")}
+          >
+            <option value="">All Install Statuses</option>
+            {(Object.keys(INSTALL_STATUS_LABELS) as InstallStatus[]).map((s) => (
+              <option key={s} value={s}>
+                {INSTALL_STATUS_LABELS[s]}
+              </option>
+            ))}
+          </select>
+          <input
+            type="text"
+            placeholder="Search type (AI/AO/BI/BO) or descriptor…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          {removedCount > 0 && (
+            <label className="mobile-checkbox-row">
+              <input type="checkbox" checked={showRemoved} onChange={(e) => setShowRemoved(e.target.checked)} />
+              Show {removedCount} removed point{removedCount === 1 ? "" : "s"}
+            </label>
+          )}
         </div>
-        <select value={panelFilter} onChange={(e) => setPanelFilter(e.target.value)}>
-          <option value="">All Panels</option>
-          {panelOptions.map((p) => (
-            <option key={p} value={p}>
-              {p}
-            </option>
-          ))}
-        </select>
-        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as PointStatus | "")}>
-          <option value="">All Cx Status</option>
-          {(Object.keys(POINT_STATUS_LABELS) as PointStatus[]).map((s) => (
-            <option key={s} value={s}>
-              {POINT_STATUS_LABELS[s]}
-            </option>
-          ))}
-        </select>
-        <select
-          value={installStatusFilter}
-          onChange={(e) => setInstallStatusFilter(e.target.value as InstallStatus | "")}
-        >
-          <option value="">All Install Statuses</option>
-          {(Object.keys(INSTALL_STATUS_LABELS) as InstallStatus[]).map((s) => (
-            <option key={s} value={s}>
-              {INSTALL_STATUS_LABELS[s]}
-            </option>
-          ))}
-        </select>
-        <input
-          type="text"
-          placeholder="Search type (AI/AO/BI/BO) or descriptor…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-        {removedCount > 0 && (
-          <label className="mobile-checkbox-row">
-            <input type="checkbox" checked={showRemoved} onChange={(e) => setShowRemoved(e.target.checked)} />
-            Show {removedCount} removed point{removedCount === 1 ? "" : "s"}
-          </label>
-        )}
-      </div>
+      )}
 
       {rows.length === 0 ? (
         <div className="empty-state">

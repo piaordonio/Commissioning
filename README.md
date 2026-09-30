@@ -142,6 +142,14 @@ while the equipment header's weighted % pills for both groups keep showing
 regardless. A tablet in portrait doesn't need this feature repeated here —
 it's already on the grid, which already has its own Columns toggle.
 
+The whole filter toolbar (Columns toggle plus the four filter controls)
+starts collapsed behind a "Filters ▾" bar, same collapse pattern as the
+header's Actions and each point card below — narrowing the list down to a
+point isn't something you need mid-checklist, only when hunting for the
+next one. The bar shows the active filter count while collapsed (e.g.
+"Filters (2) ▾") so it's clear something's been narrowed even with the
+toolbar out of sight, and switches to "Hide Filters ▲" once expanded.
+
 Each card is itself collapsed by default, down to exactly point number
 (header), point name/descriptor, and its status flags (Install and
 Commissioning status pills) — everything else (Date Commissioned, Not on
