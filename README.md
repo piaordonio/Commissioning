@@ -135,7 +135,12 @@ point, tap through its checks, move on), not a range operation, so there's
 nothing to invent a touch equivalent for. Cards still group under an
 equipment header with both weighted % pills, and the same Panel/Status/
 Install Status/search filters are there too, just stacked full-width instead
-of one toolbar row.
+of one toolbar row. The same **Columns** toggle the grid has (show/hide
+Install or Commissioning independently) is here too — hiding a group hides
+its field list and its per-point status pill together, same as the grid,
+while the equipment header's weighted % pills for both groups keep showing
+regardless. A tablet in portrait doesn't need this feature repeated here —
+it's already on the grid, which already has its own Columns toggle.
 
 It's a second view over the same data, not a responsive reflow of the
 grid's `<table>` — that table's `colSpan` tricks, sticky columns, and

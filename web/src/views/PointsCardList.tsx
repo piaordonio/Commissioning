@@ -55,6 +55,8 @@ export function PointsCardList({
   const [statusFilter, setStatusFilter] = useState<PointStatus | "">("");
   const [installStatusFilter, setInstallStatusFilter] = useState<InstallStatus | "">("");
   const [search, setSearch] = useState("");
+  const [showInstall, setShowInstall] = useState(true);
+  const [showCommissioning, setShowCommissioning] = useState(true);
 
   const installChecksByPointId = useMemo(
     () => new Map(installChecks.map((ic) => [ic.point_id, ic])),
@@ -85,6 +87,21 @@ export function PointsCardList({
   return (
     <div className="view mobile-view">
       <div className="mobile-toolbar">
+        <div className="mobile-columns-toggle">
+          <span>Columns</span>
+          <label className="mobile-checkbox-row">
+            <input type="checkbox" checked={showInstall} onChange={(e) => setShowInstall(e.target.checked)} />
+            Install
+          </label>
+          <label className="mobile-checkbox-row">
+            <input
+              type="checkbox"
+              checked={showCommissioning}
+              onChange={(e) => setShowCommissioning(e.target.checked)}
+            />
+            Commissioning
+          </label>
+        </div>
         <select value={panelFilter} onChange={(e) => setPanelFilter(e.target.value)}>
           <option value="">All Panels</option>
           {panelOptions.map((p) => (
@@ -186,13 +203,17 @@ export function PointsCardList({
                         {!point.active && <span className="muted-text"> (removed)</span>}
                       </div>
                       <div className="mobile-point-status-row">
-                        <span className={`status-pill status-${installStatus(ic)}`}>
-                          Install: {INSTALL_STATUS_LABELS[installStatus(ic)]}
-                        </span>
-                        <span className={`status-pill status-${point.status}`}>
-                          Commissioning: {POINT_STATUS_LABELS[point.status]}
-                        </span>
-                        {point.date_commissioned && (
+                        {showInstall && (
+                          <span className={`status-pill status-${installStatus(ic)}`}>
+                            Install: {INSTALL_STATUS_LABELS[installStatus(ic)]}
+                          </span>
+                        )}
+                        {showCommissioning && (
+                          <span className={`status-pill status-${point.status}`}>
+                            Commissioning: {POINT_STATUS_LABELS[point.status]}
+                          </span>
+                        )}
+                        {showCommissioning && point.date_commissioned && (
                           <span className="muted-text">{formatDateCommissioned(point.date_commissioned)}</span>
                         )}
                       </div>
@@ -203,41 +224,49 @@ export function PointsCardList({
                         <span className="controller-added-pill">Added from Controller</span>
                       )}
 
-                      <div className="mobile-field-group">
-                        <div className="mobile-field-group-label column-group-install">Install</div>
-                        {INSTALL_FIELDS.map((field) => {
-                          const v = ic ? ic[field] : "";
-                          return (
-                            <button
-                              type="button"
-                              key={field}
-                              className={`mobile-field-row mobile-field-row-${v || "empty"}`}
-                              onClick={() => cycleInstall(point, field)}
-                            >
-                              <span>{INSTALL_FIELD_LABELS[field]}</span>
-                              <span className={`mobile-field-value checklist-${v || "empty"}`}>{SYMBOL[v] || "—"}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
+                      {showInstall && (
+                        <div className="mobile-field-group">
+                          <div className="mobile-field-group-label column-group-install">Install</div>
+                          {INSTALL_FIELDS.map((field) => {
+                            const v = ic ? ic[field] : "";
+                            return (
+                              <button
+                                type="button"
+                                key={field}
+                                className={`mobile-field-row mobile-field-row-${v || "empty"}`}
+                                onClick={() => cycleInstall(point, field)}
+                              >
+                                <span>{INSTALL_FIELD_LABELS[field]}</span>
+                                <span className={`mobile-field-value checklist-${v || "empty"}`}>
+                                  {SYMBOL[v] || "—"}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
 
-                      <div className="mobile-field-group">
-                        <div className="mobile-field-group-label column-group-commissioning">Commissioning</div>
-                        {CHECK_FIELDS.map((field) => {
-                          const v = point[field];
-                          return (
-                            <button
-                              type="button"
-                              key={field}
-                              className={`mobile-field-row mobile-field-row-${v || "empty"}`}
-                              onClick={() => cycleCommissioning(point, field)}
-                            >
-                              <span>{CHECK_FIELD_LABELS[field]}</span>
-                              <span className={`mobile-field-value checklist-${v || "empty"}`}>{SYMBOL[v] || "—"}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
+                      {showCommissioning && (
+                        <div className="mobile-field-group">
+                          <div className="mobile-field-group-label column-group-commissioning">Commissioning</div>
+                          {CHECK_FIELDS.map((field) => {
+                            const v = point[field];
+                            return (
+                              <button
+                                type="button"
+                                key={field}
+                                className={`mobile-field-row mobile-field-row-${v || "empty"}`}
+                                onClick={() => cycleCommissioning(point, field)}
+                              >
+                                <span>{CHECK_FIELD_LABELS[field]}</span>
+                                <span className={`mobile-field-value checklist-${v || "empty"}`}>
+                                  {SYMBOL[v] || "—"}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
 
                       <label className="mobile-text-field">
                         Notes

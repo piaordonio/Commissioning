@@ -695,6 +695,15 @@ textarea {
   font-size: 16px;
   padding: 10px 12px;
 }
+.mobile-columns-toggle {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
 .mobile-checkbox-row {
   display: flex;
   align-items: center;
