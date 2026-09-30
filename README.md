@@ -153,14 +153,22 @@ built for a multi-person team.
   the same red as the rest of the app's danger/alert language. Clicking it
   in either state opens the same issue log (creating the first issue, or
   reviewing/adding to existing ones), so there's no separate "+" control
-  just to log a point's first problem. Closed issues are kept, not
-  deleted, so the history of what went wrong and got fixed on a point
-  isn't lost.
+  just to log a point's first problem.
+- **Closing and deleting are two different actions.** Close marks an issue
+  resolved without erasing it — closed issues are kept, not deleted, so the
+  history of what went wrong and got fixed on a point isn't lost. Delete
+  (the 🗑 button next to Close/Reopen in the modal, with a confirm prompt)
+  is for the other case: an issue that shouldn't be in the log at all — a
+  mistake, a duplicate entry — and is an actual row removal, unlike
+  everything else non-destructive in this app (points/equipment soft-delete
+  via `active`; issues otherwise soft-state via `status`).
 - **Equipment headers also show an open-issue count** (grid group headers,
   mobile equipment headers, and the Dashboard's equipment rows) whenever at
   least one of that equipment's points has an open issue — the same kind of
   at-a-glance summary the existing Install/Commissioning percent pills
-  already provide.
+  already provide. The icon is a solid red circle with "!" (`.issue-icon`
+  in `styles.css`), not a Unicode warning-triangle character, so it renders
+  identically everywhere instead of varying by platform/font.
 - **Notes is entered once, at creation, and only ever surfaces in the
   printed Issues report** — not in the issue log's own list (the modal),
   not on the Dashboard. It's for handoff-document context (a vendor ticket

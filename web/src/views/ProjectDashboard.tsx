@@ -115,7 +115,7 @@ export function ProjectDashboard({
           </span>
           {issueCount > 0 && (
             <span className="issue-count-pill">
-              ⚠ {issueCount} open issue{issueCount === 1 ? "" : "s"}
+              <span className="issue-icon">!</span> {issueCount} open issue{issueCount === 1 ? "" : "s"}
             </span>
           )}
           <span className="mobile-point-chevron" aria-hidden="true">
@@ -170,7 +170,8 @@ export function ProjectDashboard({
         <span className="progress-pill">Commissioning {overallPct}%</span>
         {activeIssueRows.length > 0 && (
           <span className="issue-count-pill">
-            ⚠ {activeIssueRows.length} open issue{activeIssueRows.length === 1 ? "" : "s"} project-wide
+            <span className="issue-icon">!</span> {activeIssueRows.length} open issue
+            {activeIssueRows.length === 1 ? "" : "s"} project-wide
           </span>
         )}
       </div>

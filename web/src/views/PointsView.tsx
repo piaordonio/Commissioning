@@ -504,8 +504,8 @@ export function PointsView({
                           <>
                             {" "}
                             <span className="issue-count-pill">
-                              ⚠ {openIssueCountByEquipment.get(g.equipmentId)} open issue
-                              {openIssueCountByEquipment.get(g.equipmentId) === 1 ? "" : "s"}
+                              <span className="issue-icon">!</span> {openIssueCountByEquipment.get(g.equipmentId)}{" "}
+                              open issue{openIssueCountByEquipment.get(g.equipmentId) === 1 ? "" : "s"}
                             </span>
                           </>
                         )}

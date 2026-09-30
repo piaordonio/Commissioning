@@ -204,6 +204,22 @@ export default function App() {
     api.update<Issue>("issues", issueId, { status }).catch(() => refreshAll());
   };
 
+  // A real delete, unlike points/equipment's soft-delete via `active` --
+  // closing an issue is already the non-destructive way to mark it
+  // resolved (kept, not removed, so its history survives); this is for the
+  // other case, a mistakenly logged or duplicate issue that shouldn't be
+  // in the log at all.
+  const deleteIssue = async (issue: Issue) => {
+    if (!window.confirm(`Delete this issue? "${issue.description}" — this cannot be undone.`)) return;
+    setIssues((list) => list.filter((i) => i.id !== issue.id));
+    try {
+      await api.remove("issues", issue.id);
+    } catch (err: any) {
+      setError(err.message ?? "Failed to delete issue");
+      refreshAll();
+    }
+  };
+
   const deletePoint = async (point: Point) => {
     const label = `${resolvedPointNumber(point)}${point.descriptor ? ` — ${point.descriptor}` : ""}`;
     if (!window.confirm(`Delete point ${label}? This cannot be undone.`)) return;
@@ -464,6 +480,7 @@ export default function App() {
                 issues={issues.filter((i) => i.point_id === point.id)}
                 onAdd={addIssue}
                 onSetStatus={setIssueStatus}
+                onDelete={deleteIssue}
               />
             </Modal>
           );

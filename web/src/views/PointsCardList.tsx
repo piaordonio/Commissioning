@@ -220,7 +220,7 @@ export function PointsCardList({
                   </span>
                   {(openIssueCountByEquipment.get(g.equipmentId) ?? 0) > 0 && (
                     <span className="issue-count-pill">
-                      ⚠ {openIssueCountByEquipment.get(g.equipmentId)} open issue
+                      <span className="issue-icon">!</span> {openIssueCountByEquipment.get(g.equipmentId)} open issue
                       {openIssueCountByEquipment.get(g.equipmentId) === 1 ? "" : "s"}
                     </span>
                   )}

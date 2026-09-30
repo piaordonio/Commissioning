@@ -13,12 +13,14 @@ export function IssuesModal({
   issues,
   onAdd,
   onSetStatus,
+  onDelete,
 }: {
   point: Point;
   equipmentTag: string;
   issues: Issue[];
   onAdd: (pointId: string, description: string, recommendedAction: string, notes: string) => void;
   onSetStatus: (issueId: string, status: IssueStatus) => void;
+  onDelete: (issue: Issue) => void;
 }) {
   const [description, setDescription] = useState("");
   const [recommendedAction, setRecommendedAction] = useState("");
@@ -99,6 +101,15 @@ export function IssuesModal({
                   onClick={() => onSetStatus(issue.id, issue.status === "open" ? "closed" : "open")}
                 >
                   {issue.status === "open" ? "Close" : "Reopen"}
+                </button>
+                <button
+                  type="button"
+                  className="icon-btn"
+                  title="Delete this issue"
+                  aria-label="Delete issue"
+                  onClick={() => onDelete(issue)}
+                >
+                  🗑
                 </button>
               </div>
               <div className="issue-description">{issue.description}</div>
