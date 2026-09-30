@@ -237,15 +237,6 @@ export function PointsCardList({
                                 Commissioning: {POINT_STATUS_LABELS[point.status]}
                               </span>
                             )}
-                            {showCommissioning && point.date_commissioned && (
-                              <span className="muted-text">{formatDateCommissioned(point.date_commissioned)}</span>
-                            )}
-                            {point.on_controller === false && (
-                              <span className="controller-missing-pill">Not on Controller</span>
-                            )}
-                            {point.added_from_controller && (
-                              <span className="controller-added-pill">Added from Controller</span>
-                            )}
                           </div>
                         </div>
                         <span className="mobile-point-chevron" aria-hidden="true">
@@ -255,6 +246,23 @@ export function PointsCardList({
 
                       {isExpanded && (
                         <div className="mobile-point-body">
+                          {(point.on_controller === false ||
+                            point.added_from_controller ||
+                            (showCommissioning && point.date_commissioned)) && (
+                            <div className="mobile-point-status-row">
+                              {showCommissioning && point.date_commissioned && (
+                                <span className="muted-text">
+                                  Commissioned {formatDateCommissioned(point.date_commissioned)}
+                                </span>
+                              )}
+                              {point.on_controller === false && (
+                                <span className="controller-missing-pill">Not on Controller</span>
+                              )}
+                              {point.added_from_controller && (
+                                <span className="controller-added-pill">Added from Controller</span>
+                              )}
+                            </div>
+                          )}
                           {showInstall && (
                             <div className="mobile-field-group">
                               <div className="mobile-field-group-label column-group-install">Install</div>

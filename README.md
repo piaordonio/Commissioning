@@ -142,16 +142,16 @@ while the equipment header's weighted % pills for both groups keep showing
 regardless. A tablet in portrait doesn't need this feature repeated here —
 it's already on the grid, which already has its own Columns toggle.
 
-Each card is itself collapsed by default, down to point number, panel,
-descriptor, and status flags (Install/Commissioned status, Date
-Commissioned, Not on Controller / Added from Controller) — the checklist
-fields and Notes/Blocked By only mount once you tap the card. On a job with
-a long points list this keeps the scroll scannable (find the point you're
-at by name and status, without a full checklist's worth of rows for every
-other point in between); each card expands and collapses independently, not
-an accordion, so more than one can be open if you're working two points at
-once. Same pattern as the header's Actions toggle, just per-card instead of
-global.
+Each card is itself collapsed by default, down to exactly point number
+(header), point name/descriptor, and its status flags (Install and
+Commissioning status pills) — everything else (Date Commissioned, Not on
+Controller / Added from Controller, the checklist fields, Notes/Blocked By)
+only mounts once you tap the card. On a job with a long points list this
+keeps the scroll scannable (find the point you're at by name and status,
+without a full checklist's worth of rows for every other point in between);
+each card expands and collapses independently, not an accordion, so more
+than one can be open if you're working two points at once. Same pattern as
+the header's Actions toggle, just per-card instead of global.
 
 The header's action buttons (Delete Project, Check Against Controller,
 Print Report, Import Access Database) are desk-oriented, not field
