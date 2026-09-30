@@ -142,6 +142,14 @@ while the equipment header's weighted % pills for both groups keep showing
 regardless. A tablet in portrait doesn't need this feature repeated here —
 it's already on the grid, which already has its own Columns toggle.
 
+The header's action buttons (Delete Project, Check Against Controller,
+Print Report, Import Access Database) are desk-oriented, not field
+workflow, so at the same narrow width they start collapsed behind a single
+"Actions ▾" bar instead of eating vertical space above the checklist —
+tap it to reveal the full row, "Hide Actions ▲" to collapse it again. Purely
+a phone-width behavior (`isNarrowViewport` gates both the toggle button and
+the default collapsed state); the desktop header is unchanged.
+
 It's a second view over the same data, not a responsive reflow of the
 grid's `<table>` — that table's `colSpan` tricks, sticky columns, and
 row/column-indexed selection state don't translate to a phone width via CSS

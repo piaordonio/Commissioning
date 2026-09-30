@@ -25,6 +25,11 @@ export default function App() {
   const [printing, setPrinting] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  // Collapsed by default on a narrow header -- these are desk-oriented
+  // actions (importing an .mdb, checking against a controller export,
+  // printing) rarely needed mid-field-check, so they start out of the way
+  // rather than eating vertical space above the checklist.
+  const [showActions, setShowActions] = useState(false);
 
   const refreshProjects = async () => {
     const list = await api.list<Project>("projects");
@@ -183,18 +188,33 @@ export default function App() {
           </>
         )}
         <div className="spacer" />
-        <button className="btn-danger" disabled={!projectId} onClick={() => setConfirmingDelete(true)}>
-          Delete Project
-        </button>
-        <button className="btn-secondary" disabled={!projectId} onClick={() => setVerifying(true)}>
-          Check Against Controller
-        </button>
-        <button className="btn-secondary" disabled={!projectId || points.length === 0} onClick={() => setPrinting(true)}>
-          Print Report
-        </button>
-        <button className="btn-primary" onClick={() => setImporting(true)}>
-          Import Access Database
-        </button>
+        {isNarrowViewport && (
+          <button
+            type="button"
+            className="btn-secondary mobile-actions-toggle"
+            onClick={() => setShowActions((v) => !v)}
+          >
+            {showActions ? "Hide Actions ▲" : "Actions ▾"}
+          </button>
+        )}
+        <div className={`app-actions-group ${isNarrowViewport && !showActions ? "app-actions-group-collapsed" : ""}`}>
+          <button className="btn-danger" disabled={!projectId} onClick={() => setConfirmingDelete(true)}>
+            Delete Project
+          </button>
+          <button className="btn-secondary" disabled={!projectId} onClick={() => setVerifying(true)}>
+            Check Against Controller
+          </button>
+          <button
+            className="btn-secondary"
+            disabled={!projectId || points.length === 0}
+            onClick={() => setPrinting(true)}
+          >
+            Print Report
+          </button>
+          <button className="btn-primary" onClick={() => setImporting(true)}>
+            Import Access Database
+          </button>
+        </div>
       </div>
 
       {error && <div className="error-banner no-print">{error}</div>}
