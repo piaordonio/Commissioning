@@ -161,3 +161,61 @@ export interface Issue {
   created_at: string;
   updated_at: string;
 }
+
+export type PointAttributeType = "boolean" | "text" | "number";
+
+export const POINT_ATTRIBUTE_TYPE_LABELS: Record<PointAttributeType, string> = {
+  boolean: "Boolean",
+  text: "Text",
+  number: "Number",
+};
+
+// Global, not project-scoped -- one definition can be reused across multiple
+// projects (see PointAttributeProject below), matching EnteliWEB's own
+// "Point Attributes" admin page. attr_type is fixed at creation -- see
+// AttributesAdmin.tsx and the comment on point_attributes in
+// supabase/schema.sql for why it's never changed once values exist.
+export interface PointAttribute {
+  id: string;
+  name: string;
+  short_text: string;
+  attr_type: PointAttributeType;
+  created_at: string;
+  updated_at: string;
+}
+
+// Which projects an attribute is currently assigned to -- EnteliWEB's
+// "Commissioning Sessions" checkboxes. No separate id: a pure many-to-many
+// join, replaced wholesale via api.setPointAttributeProjects() rather than
+// diffed row by row.
+export interface PointAttributeProject {
+  point_attribute_id: string;
+  project_id: string;
+}
+
+// The fixed dropdown-option list for a 'text' attribute configured as a
+// list -- zero options for an attribute means it renders as a plain
+// free-text input instead of a <select>. Server-persisted per attribute
+// (unlike PointsReport.tsx's client-only "Commissioned By" name list)
+// since every tech on the same project needs to see the same list.
+export interface PointAttributeOption {
+  id: string;
+  point_attribute_id: string;
+  value: string;
+  sort_order: number;
+  created_at: string;
+}
+
+// Sparse: a point only has a row for an attribute once it's been given a
+// value. value is always text regardless of attr_type -- boolean reuses
+// the exact CheckState convention ('', 'check', 'x', 'na'); number is a
+// raw numeric string -- enforced by check_point_attribute_value() in
+// supabase/schema.sql. Informational only, same as Issue.status: never
+// read by the points-status trigger, never factored into progress.ts /
+// installProgress.ts.
+export interface PointAttributeValue {
+  point_id: string;
+  point_attribute_id: string;
+  value: string;
+  updated_at: string;
+}

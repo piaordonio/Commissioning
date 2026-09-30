@@ -8,11 +8,15 @@ import {
   Issue,
   Point,
   POINT_STATUS_LABELS,
+  PointAttribute,
+  PointAttributeProject,
+  PointAttributeValue,
   PointStatus,
   Project,
 } from "../types";
 import { buildProgressByEquipment, averageProgress } from "../progress";
 import { buildIssueRows, groupIssuesByPointId, openIssueCount } from "../issues";
+import { attributesForProject, buildAttributeValueMap, getAttributeValue } from "../pointAttributes";
 import { resolvedPointNumber, displayPanel } from "../pointNumber";
 import { formatDateCommissioned, formatTimestamp } from "../formatDate";
 
@@ -54,6 +58,9 @@ export function PointsReport({
   equipment,
   points,
   issues,
+  pointAttributes,
+  pointAttributeProjects,
+  pointAttributeValues,
   onOpenIssues,
   onBack,
 }: {
@@ -61,6 +68,9 @@ export function PointsReport({
   equipment: Equipment[];
   points: Point[];
   issues: Issue[];
+  pointAttributes: PointAttribute[];
+  pointAttributeProjects: PointAttributeProject[];
+  pointAttributeValues: PointAttributeValue[];
   onOpenIssues: (point: Point) => void;
   onBack: () => void;
 }) {
@@ -119,6 +129,16 @@ export function PointsReport({
   // that a point needs issue-log attention, same "!" the live grid/mobile
   // view already show next to Blocked By.
   const issuesByPointId = useMemo(() => groupIssuesByPointId(issues), [issues]);
+
+  // Custom attribute columns, printed after the fixed checklist fields --
+  // every attribute assigned to this project, unconditionally (not only
+  // ones with data among the visible points), matching EnteliWEB's own
+  // unconditional column behavior.
+  const attrs = useMemo(
+    () => attributesForProject(pointAttributes, pointAttributeProjects, project.id),
+    [pointAttributes, pointAttributeProjects, project.id]
+  );
+  const attrValueMap = useMemo(() => buildAttributeValueMap(pointAttributeValues), [pointAttributeValues]);
 
   const issueGroups = useMemo(() => {
     const sorted = [...issueRows].sort((a, b) => {
@@ -318,6 +338,14 @@ export function PointsReport({
                       {CHECK_FIELD_LABELS[f]}
                     </th>
                   ))}
+                  {attrs.map((a) => (
+                    <th
+                      key={a.id}
+                      className={a.attr_type === "boolean" ? "checklist-item-header" : "report-col-attr-text"}
+                    >
+                      {a.short_text || a.name}
+                    </th>
+                  ))}
                   <th className="report-col-status divider-left">Status</th>
                   {!hideDateCommissioned && <th className="report-col-date divider-left">Date Comm.</th>}
                   <th className="report-col-notes divider-left">Notes</th>
@@ -331,7 +359,7 @@ export function PointsReport({
                   return (
                     <Fragment key={g.equipmentId}>
                       <tr className="table-group-header">
-                        <td colSpan={3 + CHECK_FIELDS.length + (hideDateCommissioned ? 3 : 4)}>
+                        <td colSpan={3 + CHECK_FIELDS.length + attrs.length + (hideDateCommissioned ? 3 : 4)}>
                           {eq?.tag ?? g.equipmentId}
                           {eq?.location ? ` — ${eq.location}` : ""}{" "}
                           <span className="count-pill">{g.items.length}</span>{" "}
@@ -356,6 +384,18 @@ export function PointsReport({
                               {SYMBOL[point[field]]}
                             </td>
                           ))}
+                          {attrs.map((a) => {
+                            const value = getAttributeValue(attrValueMap, point.id, a.id);
+                            return a.attr_type === "boolean" ? (
+                              <td key={a.id} className={`checklist-cell checklist-${value || "empty"}`}>
+                                {SYMBOL[value as CheckState]}
+                              </td>
+                            ) : (
+                              <td key={a.id} className="report-col-attr-text truncate" title={value}>
+                                {value || "—"}
+                              </td>
+                            );
+                          })}
                           <td className="report-col-status divider-left">
                             <span className={`status-pill status-${point.status}`}>
                               {POINT_STATUS_LABELS[point.status]}

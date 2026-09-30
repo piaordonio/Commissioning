@@ -11,6 +11,10 @@ import {
   InstallField,
   Issue,
   Point,
+  PointAttribute,
+  PointAttributeOption,
+  PointAttributeProject,
+  PointAttributeValue,
   POINT_STATUS_LABELS,
   PointStatus,
 } from "../types";
@@ -27,6 +31,7 @@ import { formatDateCommissioned } from "../formatDate";
 import { SYMBOL, nextCheckState } from "../checklistCycle";
 import { usePointRows } from "../usePointRows";
 import { buildOpenIssueCountByEquipment, groupIssuesByPointId, openIssueCount } from "../issues";
+import { attributesForProject, buildAttributeValueMap, getAttributeValue, optionsForAttribute } from "../pointAttributes";
 
 const BODY_FONT = '13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
 const HEADER_FONT = '600 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
@@ -43,25 +48,28 @@ function normalizeToken(raw: string): CheckState | null {
 
 // Install and Commissioning are two independent selection regions sharing
 // the same row order -- a shift-click, Ctrl+C/V, or keyboard-fill always
-// stays within one group's 7 columns rather than spanning both, since
+// stays within one group's columns rather than spanning both, since
 // pasting install data onto commissioning cells (or vice versa) would
-// never make sense.
-type Group = "install" | "commissioning";
+// never make sense. "attributes" is a third such region, added for
+// boolean-type custom attributes -- see booleanAttributes below; text/number
+// attributes never enter this Cell/selection engine at all (plain onBlur
+// inputs, like Notes/Blocked By). fieldCount/fieldName for this group are
+// component-body closures (not the module-level functions install/
+// commissioning use), since the attribute list isn't known until render --
+// see their definitions below, right after booleanAttributes.
+type Group = "install" | "commissioning" | "attributes";
 type Cell = { group: Group; r: number; c: number };
 
-function fieldCount(group: Group): number {
-  return group === "commissioning" ? CHECK_FIELDS.length : INSTALL_FIELDS.length;
-}
-
-function fieldName(cell: Cell): string {
-  return cell.group === "commissioning" ? CHECK_FIELDS[cell.c] : INSTALL_FIELDS[cell.c];
-}
-
 export function PointsView({
+  projectId,
   points,
   equipment,
   installChecks,
   issues,
+  pointAttributes,
+  pointAttributeOptions,
+  pointAttributeProjects,
+  pointAttributeValues,
   onSetValue,
   onBulkSetValues,
   onSetInstallValue,
@@ -69,11 +77,18 @@ export function PointsView({
   onUpdatePoint,
   onDeletePoint,
   onOpenIssues,
+  onSetAttributeValue,
+  onBulkSetAttributeValues,
 }: {
+  projectId: string;
   points: Point[];
   equipment: Equipment[];
   installChecks: InstallCheck[];
   issues: Issue[];
+  pointAttributes: PointAttribute[];
+  pointAttributeOptions: PointAttributeOption[];
+  pointAttributeProjects: PointAttributeProject[];
+  pointAttributeValues: PointAttributeValue[];
   onSetValue: (pointId: string, field: CheckField, value: CheckState) => void;
   onBulkSetValues: (updates: { id: string; field: string; value: string }[]) => void;
   onSetInstallValue: (pointId: string, field: InstallField, value: CheckState) => void;
@@ -81,6 +96,8 @@ export function PointsView({
   onUpdatePoint: (point: Point, patch: Partial<Point>) => void;
   onDeletePoint: (point: Point) => void;
   onOpenIssues: (point: Point) => void;
+  onSetAttributeValue: (pointId: string, attributeId: string, value: string) => void;
+  onBulkSetAttributeValues: (updates: { point_id: string; point_attribute_id: string; value: string }[]) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const clipboardRef = useRef<CheckState[][] | null>(null);
@@ -93,12 +110,37 @@ export function PointsView({
   const [search, setSearch] = useState("");
   const [showInstall, setShowInstall] = useState(true);
   const [showCommissioning, setShowCommissioning] = useState(true);
+  const [showAttributes, setShowAttributes] = useState(true);
 
   const installChecksByPointId = useMemo(
     () => new Map(installChecks.map((ic) => [ic.point_id, ic])),
     [installChecks]
   );
   const issuesByPointId = useMemo(() => groupIssuesByPointId(issues), [issues]);
+
+  // Boolean-type attributes join the Cell/selection engine below as the
+  // "attributes" group (full click-to-cycle/shift-click/bulk-fill/paste);
+  // text/number attributes never do -- plain onBlur inputs instead,
+  // rendered separately after the boolean block. fieldCount/fieldName are
+  // closures (not the module-level functions install/commissioning use)
+  // since this list isn't known at compile time the way CHECK_FIELDS/
+  // INSTALL_FIELDS are.
+  const projectAttrs = useMemo(
+    () => attributesForProject(pointAttributes, pointAttributeProjects, projectId),
+    [pointAttributes, pointAttributeProjects, projectId]
+  );
+  const booleanAttributes = useMemo(() => projectAttrs.filter((a) => a.attr_type === "boolean"), [projectAttrs]);
+  const textNumberAttributes = useMemo(() => projectAttrs.filter((a) => a.attr_type !== "boolean"), [projectAttrs]);
+  const attrValueMap = useMemo(() => buildAttributeValueMap(pointAttributeValues), [pointAttributeValues]);
+
+  const fieldCount = (group: Group): number =>
+    group === "commissioning" ? CHECK_FIELDS.length : group === "install" ? INSTALL_FIELDS.length : booleanAttributes.length;
+  const fieldName = (cell: Cell): string =>
+    cell.group === "commissioning"
+      ? CHECK_FIELDS[cell.c]
+      : cell.group === "install"
+      ? INSTALL_FIELDS[cell.c]
+      : booleanAttributes[cell.c].id;
 
   const { equipmentById, activePoints, removedCount, panelOptions, rows, groups } = usePointRows(
     points,
@@ -156,6 +198,8 @@ export function PointsView({
 
   const getValue = (cell: Cell): CheckState => {
     if (cell.group === "commissioning") return rows[cell.r][CHECK_FIELDS[cell.c]];
+    if (cell.group === "attributes")
+      return getAttributeValue(attrValueMap, rows[cell.r].id, booleanAttributes[cell.c].id) as CheckState;
     const ic = installChecksByPointId.get(rows[cell.r].id);
     return ic ? ic[INSTALL_FIELDS[cell.c]] : "";
   };
@@ -193,6 +237,7 @@ export function PointsView({
     const next = nextCheckState(getValue(cell));
     const pointId = rows[cell.r].id;
     if (cell.group === "commissioning") onSetValue(pointId, CHECK_FIELDS[cell.c], next);
+    else if (cell.group === "attributes") onSetAttributeValue(pointId, booleanAttributes[cell.c].id, next);
     else onSetInstallValue(pointId, INSTALL_FIELDS[cell.c], next);
   };
 
@@ -208,6 +253,14 @@ export function PointsView({
   const setRange = (state: CheckState) => {
     const b = bounds();
     if (!b) return;
+    if (b.group === "attributes") {
+      const updates: { point_id: string; point_attribute_id: string; value: string }[] = [];
+      for (let r = b.rMin; r <= b.rMax; r++)
+        for (let c = b.cMin; c <= b.cMax; c++)
+          updates.push({ point_id: rows[r].id, point_attribute_id: booleanAttributes[c].id, value: state });
+      onBulkSetAttributeValues(updates);
+      return;
+    }
     const updates: { id: string; field: string; value: string }[] = [];
     for (let r = b.rMin; r <= b.rMax; r++) {
       for (let c = b.cMin; c <= b.cMax; c++) {
@@ -247,15 +300,17 @@ export function PointsView({
     if (mod && e.key.toLowerCase() === "v") {
       e.preventDefault();
       const b = bounds()!;
-      const dispatch = b.group === "commissioning" ? onBulkSetValues : onBulkSetInstallValues;
-      const paste = (grid: (CheckState | null)[][]) => {
-        const updates: { id: string; field: string; value: string }[] = [];
+      // Shared grid-walk (single-value fill-the-whole-selection vs. a real
+      // multi-cell paste clipped to the selection/row bounds) -- the only
+      // thing that differs per group is the shape of the resulting update
+      // objects (a real column name for install/commissioning vs. an
+      // attribute id for attributes), not how the grid itself is walked.
+      const pastedCells = (grid: (CheckState | null)[][]): { r: number; c: number; value: CheckState }[] => {
+        const cells: { r: number; c: number; value: CheckState }[] = [];
         if (grid.length === 1 && grid[0].length === 1 && (b.rMax > b.rMin || b.cMax > b.cMin)) {
           const v = grid[0][0];
-          if (v === null) return;
-          for (let r = b.rMin; r <= b.rMax; r++)
-            for (let c = b.cMin; c <= b.cMax; c++)
-              updates.push({ id: rows[r].id, field: fieldName({ group: b.group, r, c }), value: v });
+          if (v === null) return cells;
+          for (let r = b.rMin; r <= b.rMax; r++) for (let c = b.cMin; c <= b.cMax; c++) cells.push({ r, c, value: v });
         } else {
           for (let i = 0; i < grid.length; i++) {
             const r = b.rMin + i;
@@ -265,11 +320,23 @@ export function PointsView({
               if (c >= fieldCount(b.group)) break;
               const v = grid[i][j];
               if (v === null) continue;
-              updates.push({ id: rows[r].id, field: fieldName({ group: b.group, r, c }), value: v });
+              cells.push({ r, c, value: v });
             }
           }
         }
-        if (updates.length) dispatch(updates);
+        return cells;
+      };
+      const paste = (grid: (CheckState | null)[][]) => {
+        const cells = pastedCells(grid);
+        if (!cells.length) return;
+        if (b.group === "attributes") {
+          onBulkSetAttributeValues(
+            cells.map(({ r, c, value }) => ({ point_id: rows[r].id, point_attribute_id: booleanAttributes[c].id, value }))
+          );
+          return;
+        }
+        const dispatch = b.group === "commissioning" ? onBulkSetValues : onBulkSetInstallValues;
+        dispatch(cells.map(({ r, c, value }) => ({ id: rows[r].id, field: fieldName({ group: b.group, r, c }), value })));
       };
 
       navigator.clipboard
@@ -357,6 +424,16 @@ export function PointsView({
             />
             Commissioning
           </label>
+          {projectAttrs.length > 0 && (
+            <label style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <input
+                type="checkbox"
+                checked={showAttributes}
+                onChange={(e) => setShowAttributes(e.target.checked)}
+              />
+              Attributes
+            </label>
+          )}
         </div>
         <label className="toolbar-label" style={{ display: "flex", alignItems: "center", gap: 6 }}>
           Panel
@@ -432,6 +509,11 @@ export function PointsView({
                     Commissioning
                   </th>
                 )}
+                {showAttributes && projectAttrs.length > 0 && (
+                  <th colSpan={projectAttrs.length} className="column-group-header column-group-attributes">
+                    Attributes
+                  </th>
+                )}
                 <th colSpan={4}></th>
               </tr>
               <tr>
@@ -464,6 +546,23 @@ export function PointsView({
                     <th className="divider-left">Date Commissioned</th>
                   </>
                 )}
+                {showAttributes && projectAttrs.length > 0 && (
+                  <>
+                    {booleanAttributes.map((a, i) => (
+                      <th key={`attr-${a.id}`} className={`checklist-item-header ${i === 0 ? "divider-left" : ""}`}>
+                        {a.short_text || a.name}
+                      </th>
+                    ))}
+                    {textNumberAttributes.map((a, i) => (
+                      <th
+                        key={`attr-${a.id}`}
+                        className={i === 0 && booleanAttributes.length === 0 ? "divider-left" : ""}
+                      >
+                        {a.short_text || a.name}
+                      </th>
+                    ))}
+                  </>
+                )}
                 <th className="divider-left" style={{ width: notesColWidth }}>
                   Notes
                 </th>
@@ -478,7 +577,9 @@ export function PointsView({
                 const pct = progressByEquipment.get(g.equipmentId) ?? 0;
                 const installPct = installProgressByEquipment.get(g.equipmentId) ?? 0;
                 const visibleFieldCols =
-                  (showInstall ? INSTALL_FIELDS.length + 1 : 0) + (showCommissioning ? CHECK_FIELDS.length + 2 : 0);
+                  (showInstall ? INSTALL_FIELDS.length + 1 : 0) +
+                  (showCommissioning ? CHECK_FIELDS.length + 2 : 0) +
+                  (showAttributes ? projectAttrs.length : 0);
                 return (
                   <Fragment key={g.equipmentId}>
                     <tr className="table-group-header">
@@ -568,6 +669,66 @@ export function PointsView({
                                 </span>
                               </td>
                               <td className="divider-left">{formatDateCommissioned(point.date_commissioned)}</td>
+                            </>
+                          )}
+                          {showAttributes && projectAttrs.length > 0 && (
+                            <>
+                              {booleanAttributes.map((attr, c) => {
+                                const cell: Cell = { group: "attributes", r, c };
+                                const v = getValue(cell);
+                                return (
+                                  <td
+                                    key={`attr-${attr.id}`}
+                                    className={`checklist-cell checklist-${v || "empty"} ${
+                                      c === 0 ? "divider-left" : ""
+                                    } ${inSelection(cell) ? "checklist-selected" : ""}`}
+                                    onClick={(e) => handleCellClick(cell, e)}
+                                  >
+                                    {SYMBOL[v]}
+                                  </td>
+                                );
+                              })}
+                              {textNumberAttributes.map((attr, i) => {
+                                const value = getAttributeValue(attrValueMap, point.id, attr.id);
+                                const options = optionsForAttribute(pointAttributeOptions, attr.id);
+                                return (
+                                  <td
+                                    key={`attr-${attr.id}`}
+                                    className={`checklist-text-col ${
+                                      i === 0 && booleanAttributes.length === 0 ? "divider-left" : ""
+                                    }`}
+                                  >
+                                    {options.length > 0 ? (
+                                      <select
+                                        className="checklist-inline-input"
+                                        value={value}
+                                        onChange={(e) => onSetAttributeValue(point.id, attr.id, e.target.value)}
+                                      >
+                                        <option value="">—</option>
+                                        {!options.some((o) => o.value === value) && value && (
+                                          <option value={value}>{value}</option>
+                                        )}
+                                        {options.map((o) => (
+                                          <option key={o.id} value={o.value}>
+                                            {o.value}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    ) : (
+                                      <input
+                                        key={`${point.id}-attr-${attr.id}`}
+                                        className="checklist-inline-input"
+                                        type={attr.attr_type === "number" ? "number" : "text"}
+                                        defaultValue={value}
+                                        placeholder="—"
+                                        onBlur={(e) => {
+                                          if (e.target.value !== value) onSetAttributeValue(point.id, attr.id, e.target.value);
+                                        }}
+                                      />
+                                    )}
+                                  </td>
+                                );
+                              })}
                             </>
                           )}
                           <td className="divider-left checklist-text-col checklist-notes-col">

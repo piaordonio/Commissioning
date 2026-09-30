@@ -3,20 +3,34 @@ import { ImportEquipmentDraft, ImportPointDraft } from "./mdbImport";
 import { ControllerPointRow } from "./controllerImport";
 import { Equipment, Point } from "./types";
 
+type ListTable = "projects" | "equipment" | "point_attributes" | "point_attribute_options" | "point_attribute_projects";
+type WriteTable = "projects" | "equipment" | "points" | "issues" | "point_attributes" | "point_attribute_options";
+
 function assertNoError<T>(data: T | null, error: { message: string } | null): T {
   if (error) throw new Error(error.message);
   return data as T;
 }
 
 export const api = {
-  list: async <T>(table: "projects" | "equipment", params?: Record<string, string>): Promise<T[]> => {
+  list: async <T>(table: ListTable, params?: Record<string, string>): Promise<T[]> => {
     let query = supabase.from(table).select("*");
     if (params) {
       for (const [key, value] of Object.entries(params)) query = query.eq(key, value);
     }
     // Matches the old server's ORDER BY: newest project first (App.tsx relies on
     // this to find a just-created project after an import), equipment by tag.
-    query = table === "projects" ? query.order("created_at", { ascending: false }) : query.order("tag");
+    // point_attribute_projects is a plain join table -- no natural order,
+    // left unsorted (App.tsx only ever filters/groups it client-side).
+    query =
+      table === "projects"
+        ? query.order("created_at", { ascending: false })
+        : table === "point_attributes"
+        ? query.order("name")
+        : table === "point_attribute_options"
+        ? query.order("sort_order")
+        : table === "point_attribute_projects"
+        ? query
+        : query.order("tag");
     const { data, error } = await query;
     return assertNoError(data as T[] | null, error);
   },
@@ -63,20 +77,30 @@ export const api = {
     return assertNoError(data as T[] | null, error);
   },
 
+  // point_attribute_values, like install_checks/issues, carries no
+  // project_id -- fetched by the point ids the caller already has from
+  // listPoints(). Sparse like issues (zero or many rows per point), not
+  // guaranteed-one-per-point like install_checks.
+  listPointAttributeValues: async <T>(pointIds: string[]): Promise<T[]> => {
+    if (pointIds.length === 0) return [];
+    const { data, error } = await supabase.from("point_attribute_values").select("*").in("point_id", pointIds);
+    return assertNoError(data as T[] | null, error);
+  },
+
   // `as any`: this client isn't wired to Supabase's generated Database types
   // (no schema codegen step for a project this size), so .insert()/.update()
   // have nothing to structurally check Partial<T> against.
-  create: async <T>(table: "projects" | "equipment" | "points" | "issues", data: Partial<T>): Promise<T> => {
+  create: async <T>(table: WriteTable, data: Partial<T>): Promise<T> => {
     const { data: row, error } = await supabase.from(table).insert(data as any).select().single();
     return assertNoError(row as T | null, error);
   },
 
-  update: async <T>(table: "projects" | "equipment" | "points" | "issues", id: string, data: Partial<T>): Promise<T> => {
+  update: async <T>(table: WriteTable, id: string, data: Partial<T>): Promise<T> => {
     const { data: row, error } = await supabase.from(table).update(data as any).eq("id", id).select().single();
     return assertNoError(row as T | null, error);
   },
 
-  remove: async (table: "projects" | "equipment" | "points" | "issues", id: string): Promise<void> => {
+  remove: async (table: WriteTable, id: string): Promise<void> => {
     const { error } = await supabase.from(table).delete().eq("id", id);
     if (error) throw new Error(error.message);
   },
@@ -96,6 +120,40 @@ export const api = {
   // not install_checks.id.
   bulkSetInstallChecks: async (updates: { id: string; field: string; value: string }[]): Promise<void> => {
     const { error } = await supabase.rpc("bulk_set_install_checks", { p_updates: updates });
+    if (error) throw new Error(error.message);
+  },
+
+  // Plain upsert, no RPC needed -- point_attribute_id is a normal FK'd
+  // value here, not a dynamic SQL column name, so there's no allowlist
+  // concern the way bulk_set_points/bulk_set_install_checks have. Used for
+  // a single boolean cell click and for text/number onBlur saves; the
+  // bulk RPC below is reserved for the grid's range-fill/paste.
+  upsertPointAttributeValue: async (pointId: string, attributeId: string, value: string): Promise<void> => {
+    const { error } = await supabase
+      .from("point_attribute_values")
+      .upsert({ point_id: pointId, point_attribute_id: attributeId, value, updated_at: new Date().toISOString() });
+    if (error) throw new Error(error.message);
+  },
+
+  // Same shape as bulkSetPoints, targeting point_attribute_values (see
+  // bulk_set_point_attribute_values in supabase/schema.sql). Boolean-type
+  // attribute columns only -- text/number never enter the grid's Cell
+  // engine, so they never go through this path.
+  bulkSetPointAttributeValues: async (
+    updates: { point_id: string; point_attribute_id: string; value: string }[]
+  ): Promise<void> => {
+    const { error } = await supabase.rpc("bulk_set_point_attribute_values", { p_updates: updates });
+    if (error) throw new Error(error.message);
+  },
+
+  // Replaces an attribute's full project-assignment set atomically (see
+  // set_point_attribute_projects in supabase/schema.sql) -- the
+  // AttributesAdmin checkbox list saves the whole set at once, not a diff.
+  setPointAttributeProjects: async (attributeId: string, projectIds: string[]): Promise<void> => {
+    const { error } = await supabase.rpc("set_point_attribute_projects", {
+      p_attribute_id: attributeId,
+      p_project_ids: projectIds,
+    });
     if (error) throw new Error(error.message);
   },
 

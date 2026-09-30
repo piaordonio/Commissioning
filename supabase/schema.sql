@@ -146,6 +146,81 @@ alter table issues add column if not exists notes text not null default '';
 -- points.date_commissioned.
 alter table issues add column if not exists closed_at timestamptz;
 
+-- User-defined checklist columns on top of the fixed 7 commissioning + 7
+-- install fields above -- modeled on EnteliWEB's own "Point Attributes"
+-- admin page. Global definitions, not project-scoped: one attribute (e.g.
+-- "End to End") can be reused across multiple projects, matching how
+-- EnteliWEB's "Commissioning Sessions" checkboxes assign a single shared
+-- attribute to specific sessions rather than redefining it per session --
+-- see point_attribute_projects below for that per-project assignment.
+-- attr_type is fixed at creation and never changed by the app after a
+-- value row exists for this attribute (enforced client-side; see
+-- AttributesAdmin.tsx) -- changing it would make existing
+-- point_attribute_values rows semantically wrong (e.g. a stored 'check'
+-- reinterpreted as literal text) and could trip check_point_attribute_value()
+-- below on the next write to an old row.
+create table if not exists point_attributes (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  short_text text not null default '',
+  attr_type text not null check (attr_type in ('boolean', 'text', 'number')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+-- Which projects an attribute is active for -- the "Commissioning Sessions"
+-- checkbox list on EnteliWEB's attribute edit page. Composite PK, no
+-- separate id: a pure many-to-many join that nothing else references
+-- directly. Replaced wholesale on save (see set_point_attribute_projects()
+-- below) rather than diffed row by row.
+create table if not exists point_attribute_projects (
+  point_attribute_id uuid not null references point_attributes(id) on delete cascade,
+  project_id uuid not null references projects(id) on delete cascade,
+  primary key (point_attribute_id, project_id)
+);
+
+-- The fixed dropdown-option list for a 'text' attribute configured as a
+-- list rather than free entry -- zero rows means the attribute renders as
+-- plain free-text input; one or more rows means it renders as a <select>
+-- instead. Lives server-side and per-attribute (unlike the client-only
+-- "Commissioned By" name list in PointsReport.tsx, which is a per-browser
+-- localStorage convenience) since multiple techs working the same project
+-- need to see the same shared list.
+create table if not exists point_attribute_options (
+  id uuid primary key default gen_random_uuid(),
+  point_attribute_id uuid not null references point_attributes(id) on delete cascade,
+  value text not null,
+  sort_order int not null default 0,
+  created_at timestamptz not null default now()
+);
+
+-- One row per (point, attribute) that actually has a value -- sparse by
+-- design, since a point only gets rows for attributes assigned to its
+-- project, and a point with no value for a given attribute should just
+-- read as blank rather than needing a placeholder row. value is always
+-- text regardless of attr_type (boolean: '' | 'check' | 'x' | 'na', the
+-- same CheckState convention as points.wired etc.; number: the raw
+-- numeric string; text: the raw string) -- consistent with every other
+-- checklist-style value column in this schema being text, and enforced by
+-- check_point_attribute_value() below since a single shared column can't
+-- use a literal per-field CHECK constraint the way every fixed field does.
+-- Informational/supplementary only, same as issues.status above: never
+-- read by set_point_status_and_date() below, and never factored into
+-- pointProgress()/installProgress() (web/src/progress.ts,
+-- web/src/installProgress.ts) -- a point's commissioning completeness
+-- stays defined purely by the fixed 7-field checklist.
+create table if not exists point_attribute_values (
+  point_id uuid not null references points(id) on delete cascade,
+  point_attribute_id uuid not null references point_attributes(id) on delete cascade,
+  value text not null default '',
+  updated_at timestamptz not null default now(),
+  primary key (point_id, point_attribute_id)
+);
+
+create index if not exists idx_point_attribute_projects_project on point_attribute_projects(project_id);
+create index if not exists idx_point_attribute_options_attr on point_attribute_options(point_attribute_id);
+create index if not exists idx_point_attribute_values_attr on point_attribute_values(point_attribute_id);
+
 create index if not exists idx_equipment_project on equipment(project_id);
 create index if not exists idx_points_equipment on points(equipment_id);
 create index if not exists idx_install_checks_point on install_checks(point_id);
@@ -186,6 +261,43 @@ create trigger trg_install_checks_updated_at before update on install_checks
 drop trigger if exists trg_issues_updated_at on issues;
 create trigger trg_issues_updated_at before update on issues
   for each row execute function set_updated_at();
+
+drop trigger if exists trg_point_attributes_updated_at on point_attributes;
+create trigger trg_point_attributes_updated_at before update on point_attributes
+  for each row execute function set_updated_at();
+
+drop trigger if exists trg_point_attribute_values_updated_at on point_attribute_values;
+create trigger trg_point_attribute_values_updated_at before update on point_attribute_values
+  for each row execute function set_updated_at();
+
+-- Enforces type integrity on point_attribute_values.value: unlike every
+-- fixed-field column in this schema, this single column is shared across
+-- all 3 attr_types, so it can't use a plain literal CHECK constraint --
+-- this trigger looks up the parent attribute's attr_type instead.
+create or replace function check_point_attribute_value()
+returns trigger
+language plpgsql
+as $$
+declare
+  v_type text;
+begin
+  select attr_type into v_type from point_attributes where id = new.point_attribute_id;
+  if v_type is null then
+    raise exception 'Unknown point_attribute_id %', new.point_attribute_id;
+  end if;
+  if v_type = 'boolean' and new.value not in ('', 'check', 'x', 'na') then
+    raise exception 'Invalid boolean attribute value %', new.value;
+  elsif v_type = 'number' and new.value <> '' and new.value !~ '^-?[0-9]+(\.[0-9]+)?$' then
+    raise exception 'Invalid number attribute value %', new.value;
+  end if;
+  -- text: unconstrained.
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_point_attribute_values_check on point_attribute_values;
+create trigger trg_point_attribute_values_check before insert or update on point_attribute_values
+  for each row execute function check_point_attribute_value();
 
 -- Keeps closed_at in sync with status, regardless of which code path
 -- touched it -- same "trigger-owned, app never writes it directly" pattern
@@ -593,6 +705,50 @@ begin
 end;
 $$;
 
+-- Upserts (point_id, point_attribute_id, value). No column-name allowlist
+-- needed, unlike bulk_set_points/bulk_set_install_checks above --
+-- point_attribute_id is a normal FK'd value in a fixed-shape upsert here,
+-- never used in dynamic SQL, so there's no injection surface to guard.
+-- Used for the grid's boolean-attribute range-fill/paste; a single cell
+-- click or a text/number onBlur save goes straight through a plain
+-- supabase-js .upsert() from the client instead (see web/src/api.ts), the
+-- same division of labor points/commissioning fields already use.
+create or replace function bulk_set_point_attribute_values(p_updates jsonb)
+returns void
+language plpgsql
+as $$
+declare
+  v_item jsonb;
+begin
+  for v_item in select * from jsonb_array_elements(p_updates) loop
+    insert into point_attribute_values (point_id, point_attribute_id, value, updated_at)
+    values (
+      (v_item->>'point_id')::uuid,
+      (v_item->>'point_attribute_id')::uuid,
+      coalesce(v_item->>'value', ''),
+      now()
+    )
+    on conflict (point_id, point_attribute_id)
+    do update set value = excluded.value, updated_at = now();
+  end loop;
+end;
+$$;
+
+-- Replaces the full set of projects an attribute is assigned to, atomically
+-- -- avoids the brief inconsistent-state window two separate plain
+-- delete+insert calls from the client would have.
+create or replace function set_point_attribute_projects(p_attribute_id uuid, p_project_ids uuid[])
+returns void
+language plpgsql
+as $$
+begin
+  delete from point_attribute_projects where point_attribute_id = p_attribute_id;
+  insert into point_attribute_projects (point_attribute_id, project_id)
+  select p_attribute_id, unnest(p_project_ids)
+  on conflict do nothing;
+end;
+$$;
+
 -- ---- Row Level Security ----
 -- No auth system exists yet — this is a single-team internal tool, so RLS
 -- is enabled with explicit "anon can do everything" policies rather than
@@ -606,6 +762,10 @@ alter table equipment enable row level security;
 alter table points enable row level security;
 alter table install_checks enable row level security;
 alter table issues enable row level security;
+alter table point_attributes enable row level security;
+alter table point_attribute_projects enable row level security;
+alter table point_attribute_options enable row level security;
+alter table point_attribute_values enable row level security;
 
 drop policy if exists "anon full access" on projects;
 create policy "anon full access" on projects for all using (true) with check (true);
@@ -622,8 +782,22 @@ create policy "anon full access" on install_checks for all using (true) with che
 drop policy if exists "anon full access" on issues;
 create policy "anon full access" on issues for all using (true) with check (true);
 
+drop policy if exists "anon full access" on point_attributes;
+create policy "anon full access" on point_attributes for all using (true) with check (true);
+
+drop policy if exists "anon full access" on point_attribute_projects;
+create policy "anon full access" on point_attribute_projects for all using (true) with check (true);
+
+drop policy if exists "anon full access" on point_attribute_options;
+create policy "anon full access" on point_attribute_options for all using (true) with check (true);
+
+drop policy if exists "anon full access" on point_attribute_values;
+create policy "anon full access" on point_attribute_values for all using (true) with check (true);
+
 grant execute on function import_points(uuid, jsonb, jsonb) to anon, authenticated;
 grant execute on function bulk_set_points(jsonb) to anon, authenticated;
 grant execute on function bulk_set_install_checks(jsonb) to anon, authenticated;
 grant execute on function pair_reimported_point(uuid, uuid) to anon, authenticated;
 grant execute on function set_controller_status(jsonb) to anon, authenticated;
+grant execute on function bulk_set_point_attribute_values(jsonb) to anon, authenticated;
+grant execute on function set_point_attribute_projects(uuid, uuid[]) to anon, authenticated;

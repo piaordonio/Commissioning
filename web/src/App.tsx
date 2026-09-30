@@ -7,12 +7,27 @@ import { PointsReport } from "./components/PointsReport";
 import { PointsView } from "./views/PointsView";
 import { PointsCardList } from "./views/PointsCardList";
 import { ProjectDashboard } from "./views/ProjectDashboard";
+import { AttributesAdmin } from "./views/AttributesAdmin";
 import { IssuesModal } from "./components/IssuesModal";
 import { averageProgress } from "./progress";
 import { averageInstallProgress } from "./installProgress";
 import { resolvedPointNumber } from "./pointNumber";
 import { useIsNarrowViewport } from "./useIsNarrowViewport";
-import { CheckField, CheckState, Equipment, InstallCheck, InstallField, Issue, IssueStatus, Point, Project } from "./types";
+import {
+  CheckField,
+  CheckState,
+  Equipment,
+  InstallCheck,
+  InstallField,
+  Issue,
+  IssueStatus,
+  Point,
+  PointAttribute,
+  PointAttributeOption,
+  PointAttributeProject,
+  PointAttributeValue,
+  Project,
+} from "./types";
 
 export default function App() {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -20,6 +35,16 @@ export default function App() {
   const [points, setPoints] = useState<Point[]>([]);
   const [installChecks, setInstallChecks] = useState<InstallCheck[]>([]);
   const [issues, setIssues] = useState<Issue[]>([]);
+  // Attribute definitions/options/project-links are global and admin-
+  // managed -- refreshed separately from the per-project cycle below (see
+  // refreshAttributeDefs) since they rarely change mid-shift, unlike
+  // pointAttributeValues, which is live tech-entered data scoped to the
+  // current project and rides the same refresh as installChecks/issues.
+  const [pointAttributes, setPointAttributes] = useState<PointAttribute[]>([]);
+  const [pointAttributeOptions, setPointAttributeOptions] = useState<PointAttributeOption[]>([]);
+  const [pointAttributeProjects, setPointAttributeProjects] = useState<PointAttributeProject[]>([]);
+  const [pointAttributeValues, setPointAttributeValues] = useState<PointAttributeValue[]>([]);
+  const [showAttributesAdmin, setShowAttributesAdmin] = useState(false);
   const [projectId, setProjectId] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -52,6 +77,7 @@ export default function App() {
       setPoints([]);
       setInstallChecks([]);
       setIssues([]);
+      setPointAttributeValues([]);
       return;
     }
     const [eq, pts] = await Promise.all([
@@ -61,12 +87,30 @@ export default function App() {
     setEquipment(eq);
     setPoints(pts);
     const pointIds = pts.map((p) => p.id);
-    const [checks, iss] = await Promise.all([
+    const [checks, iss, attrValues] = await Promise.all([
       api.listInstallChecks<InstallCheck>(pointIds),
       api.listIssues<Issue>(pointIds),
+      api.listPointAttributeValues<PointAttributeValue>(pointIds),
     ]);
     setInstallChecks(checks);
     setIssues(iss);
+    setPointAttributeValues(attrValues);
+  };
+
+  // Attribute *definitions* (unlike values) are global and rarely change
+  // mid-shift -- kept off the hot per-project refresh cycle above so the
+  // background focus/visibility/poll refresh doesn't carry 3 extra queries
+  // for data that almost never changes. Runs once on mount and again when
+  // AttributesAdmin's onBack fires, so edits made there show up immediately.
+  const refreshAttributeDefs = async () => {
+    const [attrs, opts, links] = await Promise.all([
+      api.list<PointAttribute>("point_attributes"),
+      api.list<PointAttributeOption>("point_attribute_options"),
+      api.list<PointAttributeProject>("point_attribute_projects"),
+    ]);
+    setPointAttributes(attrs);
+    setPointAttributeOptions(opts);
+    setPointAttributeProjects(links);
   };
 
   useEffect(() => {
@@ -75,7 +119,7 @@ export default function App() {
         const list = await refreshProjects();
         const firstId = list[0]?.id ?? "";
         setProjectId(firstId);
-        await refreshProjectData(firstId);
+        await Promise.all([refreshProjectData(firstId), refreshAttributeDefs()]);
       } catch (err: any) {
         setError(err.message ?? "Failed to load");
       } finally {
@@ -172,6 +216,44 @@ export default function App() {
     api.bulkSetInstallChecks(updates).catch(() => refreshAll());
   };
 
+  // point_attribute_values is sparse -- unlike setPointValue/setInstallValue,
+  // there's no guaranteed existing row to map over, so this upserts into the
+  // local list (replace if present, append if not) rather than a plain .map().
+  const upsertAttributeValueLocal = (
+    list: PointAttributeValue[],
+    pointId: string,
+    attributeId: string,
+    value: string
+  ): PointAttributeValue[] => {
+    const idx = list.findIndex((v) => v.point_id === pointId && v.point_attribute_id === attributeId);
+    if (idx === -1) {
+      return [...list, { point_id: pointId, point_attribute_id: attributeId, value, updated_at: new Date().toISOString() }];
+    }
+    const next = [...list];
+    next[idx] = { ...next[idx], value };
+    return next;
+  };
+
+  // Single boolean-cell click or a text/number onBlur save -- both go
+  // through the same plain upsert (see api.upsertPointAttributeValue),
+  // unlike the fixed checklist fields which split click vs. bulk-fill
+  // across two different server calls for a different reason (a real
+  // column to allowlist vs. not).
+  const setAttributeValue = (pointId: string, attributeId: string, value: string) => {
+    setPointAttributeValues((list) => upsertAttributeValueLocal(list, pointId, attributeId, value));
+    api.upsertPointAttributeValue(pointId, attributeId, value).catch(() => refreshAll());
+  };
+
+  // Range-fill/paste on a boolean attribute column -- mirrors bulkSetPoints,
+  // but keyed by point_id + point_attribute_id instead of point id + field
+  // name, since there's no real column for the bulk RPC to allowlist.
+  const bulkSetAttributeValues = (updates: { point_id: string; point_attribute_id: string; value: string }[]) => {
+    setPointAttributeValues((list) =>
+      updates.reduce((acc, u) => upsertAttributeValueLocal(acc, u.point_id, u.point_attribute_id, u.value), list)
+    );
+    api.bulkSetPointAttributeValues(updates).catch(() => refreshAll());
+  };
+
   // Not optimistic, unlike the setters above -- this codebase has no
   // client-side temp-id convention (every api.create call site, e.g.
   // addControllerObjectAsPoint, awaits the real row first), so this waits
@@ -241,6 +323,55 @@ export default function App() {
       setError(err.message ?? "Failed to delete point");
       refreshAll();
     }
+  };
+
+  // AttributesAdmin's CRUD handlers -- low-frequency admin actions, plain
+  // create/update/remove against point_attributes/point_attribute_options
+  // (no RPC needed, same as projects/equipment), plus the two RPC-backed
+  // operations (project assignment, which needs atomic wholesale-replace).
+  const createPointAttribute = async (attr: Partial<PointAttribute>): Promise<PointAttribute> => {
+    const created = await api.create<PointAttribute>("point_attributes", attr);
+    setPointAttributes((list) => [...list, created]);
+    return created;
+  };
+
+  const updatePointAttribute = async (id: string, patch: Partial<PointAttribute>): Promise<void> => {
+    const updated = await api.update<PointAttribute>("point_attributes", id, patch);
+    setPointAttributes((list) => list.map((a) => (a.id === id ? updated : a)));
+  };
+
+  const deletePointAttribute = async (attr: PointAttribute): Promise<void> => {
+    if (!window.confirm(`Delete attribute "${attr.name}"? This removes it from every project and point that uses it. This cannot be undone.`))
+      return;
+    await api.remove("point_attributes", attr.id);
+    setPointAttributes((list) => list.filter((a) => a.id !== attr.id));
+    setPointAttributeOptions((list) => list.filter((o) => o.point_attribute_id !== attr.id));
+    setPointAttributeProjects((list) => list.filter((l) => l.point_attribute_id !== attr.id));
+    setPointAttributeValues((list) => list.filter((v) => v.point_attribute_id !== attr.id));
+  };
+
+  const createPointAttributeOption = async (attributeId: string, value: string, sortOrder: number): Promise<void> => {
+    const created = await api.create<PointAttributeOption>("point_attribute_options", {
+      point_attribute_id: attributeId,
+      value,
+      sort_order: sortOrder,
+    });
+    setPointAttributeOptions((list) => [...list, created]);
+  };
+
+  const updatePointAttributeOption = async (id: string, value: string): Promise<void> => {
+    const updated = await api.update<PointAttributeOption>("point_attribute_options", id, { value });
+    setPointAttributeOptions((list) => list.map((o) => (o.id === id ? updated : o)));
+  };
+
+  const deletePointAttributeOption = async (option: PointAttributeOption): Promise<void> => {
+    await api.remove("point_attribute_options", option.id);
+    setPointAttributeOptions((list) => list.filter((o) => o.id !== option.id));
+  };
+
+  const savePointAttributeProjects = async (attributeId: string, projectIds: string[]): Promise<void> => {
+    await api.setPointAttributeProjects(attributeId, projectIds);
+    await refreshAttributeDefs();
   };
 
   // A removed/inactive point shouldn't drag these down (or prop them up) --
@@ -338,18 +469,46 @@ export default function App() {
           <button className="btn-primary" onClick={() => setImporting(true)}>
             Import Access Database
           </button>
+          {/* Not disabled when no project is selected, unlike every other
+              button in this group -- attribute definitions are global, not
+              tied to a project the way Delete Project/Check Against
+              Controller/Print Report are. */}
+          <button className="btn-secondary" onClick={() => setShowAttributesAdmin(true)}>
+            Manage Attributes
+          </button>
         </div>
       </div>
 
       {error && <div className="error-banner no-print">{error}</div>}
 
       <div className="app-main">
-        {printing && currentProject ? (
+        {showAttributesAdmin ? (
+          <AttributesAdmin
+            pointAttributes={pointAttributes}
+            pointAttributeOptions={pointAttributeOptions}
+            pointAttributeProjects={pointAttributeProjects}
+            projects={projects}
+            onCreate={createPointAttribute}
+            onUpdate={updatePointAttribute}
+            onDelete={deletePointAttribute}
+            onCreateOption={createPointAttributeOption}
+            onUpdateOption={updatePointAttributeOption}
+            onDeleteOption={deletePointAttributeOption}
+            onSaveProjectAssignment={savePointAttributeProjects}
+            onBack={async () => {
+              setShowAttributesAdmin(false);
+              await refreshAttributeDefs();
+            }}
+          />
+        ) : printing && currentProject ? (
           <PointsReport
             project={currentProject}
             equipment={equipment}
             points={points}
             issues={issues}
+            pointAttributes={pointAttributes}
+            pointAttributeProjects={pointAttributeProjects}
+            pointAttributeValues={pointAttributeValues}
             onOpenIssues={(point) => setIssuesModalPointId(point.id)}
             onBack={() => setPrinting(false)}
           />
@@ -365,22 +524,33 @@ export default function App() {
           />
         ) : isNarrowViewport ? (
           <PointsCardList
+            projectId={projectId}
             points={points}
             equipment={equipment}
             installChecks={installChecks}
             issues={issues}
+            pointAttributes={pointAttributes}
+            pointAttributeOptions={pointAttributeOptions}
+            pointAttributeProjects={pointAttributeProjects}
+            pointAttributeValues={pointAttributeValues}
             onSetValue={setPointValue}
             onSetInstallValue={setInstallValue}
             onUpdatePoint={updatePoint}
             onDeletePoint={deletePoint}
             onOpenIssues={(point) => setIssuesModalPointId(point.id)}
+            onSetAttributeValue={setAttributeValue}
           />
         ) : (
           <PointsView
+            projectId={projectId}
             points={points}
             equipment={equipment}
             installChecks={installChecks}
             issues={issues}
+            pointAttributes={pointAttributes}
+            pointAttributeOptions={pointAttributeOptions}
+            pointAttributeProjects={pointAttributeProjects}
+            pointAttributeValues={pointAttributeValues}
             onSetValue={setPointValue}
             onBulkSetValues={bulkSetPoints}
             onSetInstallValue={setInstallValue}
@@ -388,6 +558,8 @@ export default function App() {
             onUpdatePoint={updatePoint}
             onDeletePoint={deletePoint}
             onOpenIssues={(point) => setIssuesModalPointId(point.id)}
+            onSetAttributeValue={setAttributeValue}
+            onBulkSetAttributeValues={bulkSetAttributeValues}
           />
         )}
       </div>

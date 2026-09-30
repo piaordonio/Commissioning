@@ -11,6 +11,10 @@ import {
   InstallField,
   Issue,
   Point,
+  PointAttribute,
+  PointAttributeOption,
+  PointAttributeProject,
+  PointAttributeValue,
   POINT_STATUS_LABELS,
   PointStatus,
 } from "../types";
@@ -26,6 +30,7 @@ import { formatDateCommissioned } from "../formatDate";
 import { SYMBOL, nextCheckState } from "../checklistCycle";
 import { usePointRows } from "../usePointRows";
 import { buildOpenIssueCountByEquipment, groupIssuesByPointId, openIssueCount } from "../issues";
+import { attributesForProject, buildAttributeValueMap, getAttributeValue, optionsForAttribute } from "../pointAttributes";
 
 // The phone-width counterpart to PointsView.tsx -- same data and handler
 // shapes, entirely different markup. PointsView.tsx's grid is real <table>
@@ -36,25 +41,37 @@ import { buildOpenIssueCountByEquipment, groupIssuesByPointId, openIssueCount } 
 // the grid. No selection state, no keyboard shortcuts, no bulk-fill --
 // confirmed the field workflow here is single point at a time, tap to cycle.
 export function PointsCardList({
+  projectId,
   points,
   equipment,
   installChecks,
   issues,
+  pointAttributes,
+  pointAttributeOptions,
+  pointAttributeProjects,
+  pointAttributeValues,
   onSetValue,
   onSetInstallValue,
   onUpdatePoint,
   onDeletePoint,
   onOpenIssues,
+  onSetAttributeValue,
 }: {
+  projectId: string;
   points: Point[];
   equipment: Equipment[];
   installChecks: InstallCheck[];
   issues: Issue[];
+  pointAttributes: PointAttribute[];
+  pointAttributeOptions: PointAttributeOption[];
+  pointAttributeProjects: PointAttributeProject[];
+  pointAttributeValues: PointAttributeValue[];
   onSetValue: (pointId: string, field: CheckField, value: CheckState) => void;
   onSetInstallValue: (pointId: string, field: InstallField, value: CheckState) => void;
   onUpdatePoint: (point: Point, patch: Partial<Point>) => void;
   onDeletePoint: (point: Point) => void;
   onOpenIssues: (point: Point) => void;
+  onSetAttributeValue: (pointId: string, attributeId: string, value: string) => void;
 }) {
   const [showRemoved, setShowRemoved] = useState(false);
   const [panelFilter, setPanelFilter] = useState("");
@@ -89,6 +106,14 @@ export function PointsCardList({
   );
   const issuesByPointId = useMemo(() => groupIssuesByPointId(issues), [issues]);
 
+  const attrs = useMemo(
+    () => attributesForProject(pointAttributes, pointAttributeProjects, projectId),
+    [pointAttributes, pointAttributeProjects, projectId]
+  );
+  const booleanAttrs = useMemo(() => attrs.filter((a) => a.attr_type === "boolean"), [attrs]);
+  const textNumberAttrs = useMemo(() => attrs.filter((a) => a.attr_type !== "boolean"), [attrs]);
+  const attrValueMap = useMemo(() => buildAttributeValueMap(pointAttributeValues), [pointAttributeValues]);
+
   const { equipmentById, activePoints, removedCount, panelOptions, rows, groups } = usePointRows(
     points,
     equipment,
@@ -112,6 +137,10 @@ export function PointsCardList({
   };
   const cycleCommissioning = (point: Point, field: CheckField) => {
     onSetValue(point.id, field, nextCheckState(point[field]));
+  };
+  const cycleAttribute = (point: Point, attr: PointAttribute) => {
+    const current = getAttributeValue(attrValueMap, point.id, attr.id) as CheckState;
+    onSetAttributeValue(point.id, attr.id, nextCheckState(current));
   };
 
   const activeFilterCount = [panelFilter, statusFilter, installStatusFilter, search].filter(Boolean).length;
@@ -338,6 +367,64 @@ export function PointsCardList({
                                       {SYMBOL[v] || "—"}
                                     </span>
                                   </button>
+                                );
+                              })}
+                            </div>
+                          )}
+
+                          {attrs.length > 0 && (
+                            <div className="mobile-field-group">
+                              <div className="mobile-field-group-label column-group-attributes">Attributes</div>
+                              {booleanAttrs.map((attr) => {
+                                const v = getAttributeValue(attrValueMap, point.id, attr.id) as CheckState;
+                                return (
+                                  <button
+                                    type="button"
+                                    key={attr.id}
+                                    className={`mobile-field-row mobile-field-row-${v || "empty"}`}
+                                    onClick={() => cycleAttribute(point, attr)}
+                                  >
+                                    <span>{attr.short_text || attr.name}</span>
+                                    <span className={`mobile-field-value checklist-${v || "empty"}`}>
+                                      {SYMBOL[v] || "—"}
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                              {textNumberAttrs.map((attr) => {
+                                const value = getAttributeValue(attrValueMap, point.id, attr.id);
+                                const options = optionsForAttribute(pointAttributeOptions, attr.id);
+                                return (
+                                  <label key={attr.id} className="mobile-text-field">
+                                    {attr.short_text || attr.name}
+                                    {options.length > 0 ? (
+                                      <select
+                                        className="mobile-input"
+                                        value={value}
+                                        onChange={(e) => onSetAttributeValue(point.id, attr.id, e.target.value)}
+                                      >
+                                        <option value="">—</option>
+                                        {!options.some((o) => o.value === value) && value && (
+                                          <option value={value}>{value}</option>
+                                        )}
+                                        {options.map((o) => (
+                                          <option key={o.id} value={o.value}>
+                                            {o.value}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    ) : (
+                                      <input
+                                        className="mobile-input"
+                                        type={attr.attr_type === "number" ? "number" : "text"}
+                                        defaultValue={value}
+                                        placeholder="—"
+                                        onBlur={(e) => {
+                                          if (e.target.value !== value) onSetAttributeValue(point.id, attr.id, e.target.value);
+                                        }}
+                                      />
+                                    )}
+                                  </label>
                                 );
                               })}
                             </div>

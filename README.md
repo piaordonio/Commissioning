@@ -122,6 +122,56 @@ A few things worth knowing if you're touching this:
   instead), since pasting Install data onto Commissioning cells wouldn't
   mean anything.
 
+## Custom Point Attributes: project-assignable checklist columns
+
+Some projects need point-level data beyond the fixed 7 commissioning + 7 install
+fields above — modeled on EnteliWEB's own "Point Attributes" admin page, reached via
+**Manage Attributes** in the header's Actions menu. A few design decisions worth
+calling out:
+
+- **Attribute definitions are global, not project-scoped.** One attribute (e.g. "End
+  to End") can be reused across any number of projects — a join table
+  (`point_attribute_projects`) is the per-project on/off toggle, EnteliWEB's own
+  "Commissioning Sessions" checkbox list, replaced wholesale on save rather than
+  diffed row by row. Defining the same attribute separately per project would just
+  invite them to drift out of sync with each other for no benefit.
+- **Values live in their own sparse table, not new columns on `points`.**
+  `bulk_set_points()`/`bulk_set_install_checks()` allowlist a *static, literal* array
+  of column names before their dynamic SQL — that pattern can't extend to a dynamic
+  attribute id, so a custom value can't become a real column. `point_attribute_values`
+  (point_id, point_attribute_id, value) holds a row only once a point actually has a
+  value for that attribute — not a placeholder row for every attribute assigned to a
+  project. `value` is always text regardless of type (Boolean reuses the exact
+  `'', 'check', 'x', 'na'` convention every fixed checklist column already uses;
+  Number is a raw numeric string), enforced by a trigger
+  (`check_point_attribute_value()`) since this one shared column can't use a literal
+  per-field CHECK constraint the way every fixed field does.
+- **Boolean attributes join the grid's Cell-selection engine as a third group; Text
+  and Number don't.** The same click-to-cycle/shift-click-range/keyboard-fill/
+  copy-paste behavior Install and Commissioning already have extends to Boolean
+  attribute columns for free — they're a third independent region (a selection never
+  spans into Install or Commissioning, same as those two never span each other). Text
+  and Number attributes behave like Notes/Blocked By instead: plain inputs outside the
+  Cell engine, no click-to-cycle. A Text attribute with one or more dropdown options
+  defined renders as a `<select>` instead of a free-text input — those options are
+  server-persisted per attribute (unlike the Commissioned By name list below, which is
+  a deliberate per-browser localStorage convenience), since every tech on the same
+  project needs to see the same shared list.
+- **An attribute's Type is locked after its first save.** EnteliWEB lets you change an
+  attribute's type freely, but once `point_attribute_values` rows exist for it,
+  changing the type would make old values (e.g. a stored `'check'`) semantically wrong
+  and could trip the integrity trigger above on the next write to an old row.
+- **Informational only, same treatment as `issues.status`.** Custom attribute values
+  are never read by `set_point_status_and_date()` and never factored into
+  `pointProgress()`/`installProgress()` — a point's commissioning completeness stays
+  defined purely by the fixed 7-field checklist, regardless of what custom attributes
+  happen to be assigned to its project.
+- **The printed report shows every attribute column assigned to the project,
+  unconditionally** — not only the ones with data among the currently visible points.
+  A column that silently disappeared between prints depending on which points happen
+  to have data would be more confusing than a wide table, and this matches EnteliWEB's
+  own unconditional column behavior.
+
 ## An issue log per point, and a project Dashboard
 
 Alongside the two checklists, each point can carry a structured, multi-entry

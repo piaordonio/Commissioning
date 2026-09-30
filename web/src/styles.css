@@ -311,6 +311,59 @@ textarea {
   margin-top: 6px;
 }
 
+/* AttributesAdmin -- a full-page form (unlike the modal-based forms .form
+   was originally styled for), so it gets its own width cap rather than
+   stretching to the page's full content width. */
+.attribute-form {
+  max-width: 480px;
+}
+
+.field-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.attribute-options-editor,
+.attribute-projects-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.attribute-options-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.attribute-option-row,
+.attribute-option-add-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.attribute-option-row input,
+.attribute-option-add-row input {
+  flex: 1;
+}
+
+.attribute-project-checkboxes {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.attribute-project-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text);
+}
+
 /* Checklist / points grid */
 .checklist-wrap {
   flex: 1;
@@ -392,6 +445,11 @@ textarea {
 .column-group-commissioning {
   background: #eff6ff;
   color: #1d4ed8;
+}
+
+.column-group-attributes {
+  background: #f5f3ff;
+  color: #6d28d9;
 }
 
 .checklist-check {
@@ -602,6 +660,17 @@ textarea {
   width: 74px;
   min-width: 74px;
   max-width: 74px;
+}
+
+/* Custom text/number attribute columns -- narrower than Notes/Blocked By,
+   which are the app's known-longer free-text fields; existing .report-col-*
+   classes are all field-specific, so this one is shared across every
+   text/number attribute rather than generated per attribute. */
+.report-table th.report-col-attr-text,
+.report-table td.report-col-attr-text {
+  width: 60px;
+  min-width: 60px;
+  max-width: 60px;
 }
 
 .report-table th.report-col-date,
