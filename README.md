@@ -206,7 +206,16 @@ equipment into **Not Commissioned** / **Commissioned** by an exact check
 (every point's status is `commissioned` — not a rounded percentage, so a
 99%-but-not-100% device doesn't misleadingly read as done), click-expands
 each row inline to show its points, and lists every open issue project-wide
-in an **Active Issues** panel for quick triage. It reuses `usePointRows()` —
+in an **Active Issues** panel for quick triage. Each of the two columns'
+headers also shows the per-point status breakdown scoped to that column —
+same "X Commissioned, Y In Progress, Z Not Started" line the grid's own
+toolbar already shows, just per-bucket instead of one project-wide number.
+For Not Commissioned this is a real mix (an equipment group lands there the
+moment even one of its points isn't commissioned, so the rest can still be
+anywhere from Not Started to fully Commissioned — this line says how close);
+for the Commissioned column it's tautologically all-commissioned at the
+point level (same exact check that sorted the equipment there), so its line
+just confirms the point count. It reuses `usePointRows()` —
 the same equipment-grouping/filtering hook the grid and phone view already
 share — with `showRemoved: false` and no filter UI, rather than reinventing
 grouping a third time; this is meant as a live status overview, where a

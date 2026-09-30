@@ -84,6 +84,28 @@ export function ProjectDashboard({
   const commissionedGroups = groups.filter((g) => g.items.every((p) => p.status === "commissioned"));
   const notCommissionedGroups = groups.filter((g) => !g.items.every((p) => p.status === "commissioned"));
 
+  // Same per-point status breakdown the grid's toolbar already shows, but
+  // scoped to each column rather than one project-wide line -- "Not
+  // Commissioned" groups equipment that isn't fully done, but its
+  // individual points can still be a mix of all three statuses; this says
+  // how close. "Commissioned" is tautologically all-commissioned at the
+  // point level (every point in a fully-commissioned equipment group is
+  // commissioned by the same exact check used to sort it into this
+  // column), so its line mainly confirms the point count.
+  const pointStatusCounts = (pts: Point[]) => {
+    const counts = { not_started: 0, in_progress: 0, commissioned: 0 };
+    for (const p of pts) counts[p.status]++;
+    return counts;
+  };
+  const notCommissionedStatusCounts = useMemo(
+    () => pointStatusCounts(notCommissionedGroups.flatMap((g) => g.items)),
+    [notCommissionedGroups]
+  );
+  const commissionedStatusCounts = useMemo(
+    () => pointStatusCounts(commissionedGroups.flatMap((g) => g.items)),
+    [commissionedGroups]
+  );
+
   const renderEquipmentRow = (g: PointGroup) => {
     const eq = equipmentById[g.equipmentId];
     const pct = progressByEquipment.get(g.equipmentId) ?? 0;
@@ -181,7 +203,16 @@ export function ProjectDashboard({
       ) : (
         <div className="dashboard-columns">
           <div className="dashboard-column">
-            <div className="dashboard-column-header">Not Commissioned ({notCommissionedGroups.length})</div>
+            <div className="dashboard-column-header">
+              Not Commissioned ({notCommissionedGroups.length})
+              {notCommissionedGroups.length > 0 && (
+                <div className="dashboard-column-header-detail">
+                  {notCommissionedStatusCounts.commissioned} Commissioned,{" "}
+                  {notCommissionedStatusCounts.in_progress} In Progress,{" "}
+                  {notCommissionedStatusCounts.not_started} Not Started
+                </div>
+              )}
+            </div>
             {notCommissionedGroups.length === 0 ? (
               <div className="empty-state">Every device is fully commissioned.</div>
             ) : (
@@ -189,7 +220,14 @@ export function ProjectDashboard({
             )}
           </div>
           <div className="dashboard-column">
-            <div className="dashboard-column-header">Commissioned ({commissionedGroups.length})</div>
+            <div className="dashboard-column-header">
+              Commissioned ({commissionedGroups.length})
+              {commissionedGroups.length > 0 && (
+                <div className="dashboard-column-header-detail">
+                  {commissionedStatusCounts.commissioned} points commissioned
+                </div>
+              )}
+            </div>
             {commissionedGroups.length === 0 ? (
               <div className="empty-state">No devices fully commissioned yet.</div>
             ) : (

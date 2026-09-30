@@ -1151,6 +1151,12 @@ textarea {
   border-bottom: 1px solid var(--border);
 }
 
+.dashboard-column-header-detail {
+  font-weight: 400;
+  font-size: 11px;
+  margin-top: 2px;
+}
+
 .dashboard-equipment-row-wrap {
   border-bottom: 1px solid var(--border);
 }
