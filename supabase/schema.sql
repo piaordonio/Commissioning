@@ -140,6 +140,12 @@ create table if not exists issues (
 -- second block of free text nobody needs while working a point.
 alter table issues add column if not exists notes text not null default '';
 
+-- Idempotent for anyone who already ran an earlier version of this file
+-- before this column existed -- maintained by set_issue_closed_at() below,
+-- never written directly by the app, same "trigger-owned" pattern as
+-- points.date_commissioned.
+alter table issues add column if not exists closed_at timestamptz;
+
 create index if not exists idx_equipment_project on equipment(project_id);
 create index if not exists idx_points_equipment on points(equipment_id);
 create index if not exists idx_install_checks_point on install_checks(point_id);
@@ -180,6 +186,33 @@ create trigger trg_install_checks_updated_at before update on install_checks
 drop trigger if exists trg_issues_updated_at on issues;
 create trigger trg_issues_updated_at before update on issues
   for each row execute function set_updated_at();
+
+-- Keeps closed_at in sync with status, regardless of which code path
+-- touched it -- same "trigger-owned, app never writes it directly" pattern
+-- as points.date_commissioned in set_point_status_and_date() below. Set
+-- only on the transition into closed (never overwritten while already
+-- closed, so it doesn't reset on an unrelated edit) and cleared the
+-- moment the issue is reopened, so it always reflects the current close,
+-- not a permanent first-closed record.
+create or replace function set_issue_closed_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  if new.status = 'closed' then
+    if new.closed_at is null then
+      new.closed_at := now();
+    end if;
+  else
+    new.closed_at := null;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_issues_closed_at on issues;
+create trigger trg_issues_closed_at before insert or update on issues
+  for each row execute function set_issue_closed_at();
 
 -- Every point gets a blank install_checks row for free the moment it's
 -- created, regardless of which code path inserted it (an .mdb import, "Add

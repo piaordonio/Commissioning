@@ -353,6 +353,7 @@ export function PointsReport({
                 <th className="report-col-issue-desc">Recommended Action</th>
                 <th className="report-col-status divider-left">Status</th>
                 <th className="report-col-date divider-left">Date Created</th>
+                <th className="report-col-date divider-left">Date Closed</th>
                 <th className="report-col-issue-desc divider-left">Notes</th>
                 <th className="no-print"></th>
               </tr>
@@ -363,7 +364,7 @@ export function PointsReport({
                 return (
                   <Fragment key={g.equipmentId}>
                     <tr className="table-group-header">
-                      <td colSpan={9}>
+                      <td colSpan={10}>
                         {eq?.tag ?? g.equipmentId}
                         {eq?.location ? ` — ${eq.location}` : ""}{" "}
                         <span className="issue-count-pill">
@@ -386,6 +387,9 @@ export function PointsReport({
                           </span>
                         </td>
                         <td className="report-col-date divider-left">{formatTimestamp(issue.created_at)}</td>
+                        <td className="report-col-date divider-left">
+                          {issue.closed_at ? formatTimestamp(issue.closed_at) : "—"}
+                        </td>
                         <td className="report-col-issue-desc divider-left">{issue.notes || "—"}</td>
                         <td className="no-print">
                           <button

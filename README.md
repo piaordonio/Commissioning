@@ -126,13 +126,14 @@ A few things worth knowing if you're touching this:
 
 Alongside the two checklists, each point can carry a structured, multi-entry
 **issue log** — `description`, `recommended_action`, `notes`, an
-`open`/`closed` status, and the date it was created (shown next to the
-status in the issue log itself) (see `issues` in `supabase/schema.sql`,
-`web/src/issues.ts`, `web/src/components/IssuesModal.tsx`). This is
-deliberately minimal, not full parity with something like EnteliWEB's
-commissioning issue tracker — no priority, assignee, part number, or
-per-issue comment trail — because a single tech tracking their own punch
-list doesn't need a triage workflow built for a multi-person team.
+`open`/`closed` status, the date it was created, and the date it was
+closed (shown next to the status in the issue log itself) (see `issues` in
+`supabase/schema.sql`, `web/src/issues.ts`,
+`web/src/components/IssuesModal.tsx`). This is deliberately minimal, not
+full parity with something like EnteliWEB's commissioning issue tracker —
+no priority, assignee, part number, or per-issue comment trail — because a
+single tech tracking their own punch list doesn't need a triage workflow
+built for a multi-person team.
 
 - **Additive, not a replacement for Blocked By.** `points.blocked_by` stays
   exactly as it was — a single free-text field. Issues are a different data
@@ -167,6 +168,15 @@ list doesn't need a triage workflow built for a multi-person team.
   a tech is actually working the point, so it stays out of the compact
   on-screen lists and only appears on the document meant to leave the
   building.
+- **`closed_at` autofills the moment an issue is closed.** Same
+  trigger-owned pattern as `points.date_commissioned` — `set_issue_closed_at()`
+  in `supabase/schema.sql` sets it on the transition into `closed`, never
+  overwrites it while an issue stays closed (so an unrelated edit doesn't
+  reset it), and clears it back to null the moment the issue is reopened.
+  The app never writes it directly; clicking Close/Reopen only ever sends
+  `status`. The modal shows a client-side mirror of "closed just now" the
+  instant you click Close, purely for immediate feedback — the value that
+  actually persists always comes from the trigger.
 
 The **Dashboard** (`web/src/views/ProjectDashboard.tsx`) is the app's
 landing page — opening a project goes straight to the project-wide rollup,

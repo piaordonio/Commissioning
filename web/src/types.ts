@@ -154,6 +154,10 @@ export interface Issue {
   // cluttering the on-screen views a tech checks while working a point.
   notes: string;
   status: IssueStatus;
+  // Maintained entirely by set_issue_closed_at() in supabase/schema.sql --
+  // never written directly by the app. Set on the transition into closed,
+  // cleared on reopen, same "trigger-owned" pattern as Point.date_commissioned.
+  closed_at: string | null;
   created_at: string;
   updated_at: string;
 }

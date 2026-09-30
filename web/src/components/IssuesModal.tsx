@@ -88,7 +88,10 @@ export function IssuesModal({
             <div key={issue.id} className="issue-row">
               <div className="issue-row-header">
                 <span className={`status-pill status-${issue.status}`}>{ISSUE_STATUS_LABELS[issue.status]}</span>
-                <span className="muted-text">{formatTimestamp(issue.created_at)}</span>
+                <span className="muted-text">Opened {formatTimestamp(issue.created_at)}</span>
+                {issue.status === "closed" && issue.closed_at && (
+                  <span className="muted-text">Closed {formatTimestamp(issue.closed_at)}</span>
+                )}
                 <div className="spacer" />
                 <button
                   type="button"

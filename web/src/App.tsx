@@ -191,7 +191,16 @@ export default function App() {
   };
 
   const setIssueStatus = (issueId: string, status: IssueStatus) => {
-    setIssues((list) => list.map((i) => (i.id === issueId ? { ...i, status } : i)));
+    // closed_at is trigger-owned server-side (set_issue_closed_at() in
+    // supabase/schema.sql) -- this mirror is only for instant UI feedback
+    // on click, not a second source of truth; only `status` is ever sent.
+    setIssues((list) =>
+      list.map((i) =>
+        i.id === issueId
+          ? { ...i, status, closed_at: status === "closed" ? i.closed_at ?? new Date().toISOString() : null }
+          : i
+      )
+    );
     api.update<Issue>("issues", issueId, { status }).catch(() => refreshAll());
   };
 
