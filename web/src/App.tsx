@@ -28,7 +28,11 @@ export default function App() {
   const [printing, setPrinting] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [showDashboard, setShowDashboard] = useState(false);
+  // Dashboard is the landing page -- a project-wide status check is what a
+  // tech (or a supervisor) wants on open, not straight into one panel's
+  // checklist. "Back to Points" (and the header's own Dashboard button)
+  // still reach the grid/mobile view from here.
+  const [showDashboard, setShowDashboard] = useState(true);
   const [issuesModalPointId, setIssuesModalPointId] = useState<string | null>(null);
   // Collapsed by default on a narrow header -- these are desk-oriented
   // actions (importing an .mdb, checking against a controller export,
@@ -126,7 +130,7 @@ export default function App() {
   // its own guaranteed-fresh fetch on open rather than relying on the
   // background refresh above having happened to run recently.
   useEffect(() => {
-    if (showDashboard) refreshAll();
+    if (showDashboard && projectId) refreshAll();
   }, [showDashboard]);
 
   const setPointValue = (pointId: string, field: CheckField, value: CheckState) => {

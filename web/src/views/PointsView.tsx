@@ -609,7 +609,7 @@ export function PointsView({
                                   }}
                                   onKeyDown={(e) => e.stopPropagation()}
                                 >
-                                  {openCount > 0 ? `⚠ ${openCount}` : "⚑"}
+                                  {openCount > 0 ? `! ${openCount}` : "⚑"}
                                 </button>
                               );
                             })()}

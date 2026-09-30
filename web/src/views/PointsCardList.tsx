@@ -380,7 +380,7 @@ export function PointsCardList({
                                     aria-label="Issues"
                                     onClick={() => onOpenIssues(point)}
                                   >
-                                    {openCount > 0 ? `⚠ ${openCount}` : "⚑"}
+                                    {openCount > 0 ? `! ${openCount}` : "⚑"}
                                   </button>
                                 );
                               })()}

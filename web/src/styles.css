@@ -469,10 +469,9 @@ textarea {
 }
 
 /* Always-visible flag/entry-point next to Blocked By -- neutral outline by
-   default, switches to a warning badge with the open count the moment the
-   point has an open issue. Deliberately a different color family than
-   .controller-missing-pill's red so the two alerts don't read as
-   identical at a glance. */
+   default, switches to a red "!" with the open count the moment the point
+   has an open issue, same red as the rest of the app's danger/alert
+   language (--danger, .controller-missing-pill). */
 .issue-flag {
   border: 1px solid var(--border);
   border-radius: 999px;
@@ -484,9 +483,9 @@ textarea {
   background: white;
 }
 .issue-flag-active {
-  border-color: #fdba74;
-  background: #ffedd5;
-  color: #9a3412;
+  border-color: var(--danger);
+  background: #fee2e2;
+  color: var(--danger);
 }
 
 .issue-count-pill {
@@ -1160,4 +1159,14 @@ textarea {
   text-align: left;
   font-family: inherit;
   color: var(--text);
+}
+
+/* Dashboard-only: the issue's own text reads in red so it stands out in a
+   screen whose job is triage. Scoped to .dashboard-view rather than the
+   shared .issue-description/.issue-recommended-action classes themselves,
+   since those are also used inside the Issues modal, which stays its
+   normal color. */
+.dashboard-view .issue-description,
+.dashboard-view .issue-recommended-action {
+  color: var(--danger);
 }

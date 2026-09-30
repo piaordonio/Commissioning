@@ -146,21 +146,28 @@ built for a multi-person team.
   issue happened to exist; commissioning completeness and "does this point
   have a known problem" are answers to two different questions.
 - **A flag next to Blocked By does double duty.** An always-visible button
-  sits beside the Blocked By field in both the grid and the phone view —
-  neutral (⚑) when a point has no open issues, a warning badge with the open
-  count (⚠ N) the moment it does. Clicking it in either state opens the same
-  issue log (creating the first issue, or reviewing/adding to existing
-  ones), so there's no separate "+" control just to log a point's first
-  problem. Closed issues are kept, not deleted, so the history of what went
-  wrong and got fixed on a point isn't lost.
+  sits beside the Blocked By field in the grid, the phone view, and the
+  Dashboard's expanded point rows — neutral (⚑) when a point has no open
+  issues, a red "!" with the open count (e.g. `! 2`) the moment it does,
+  the same red as the rest of the app's danger/alert language. Clicking it
+  in either state opens the same issue log (creating the first issue, or
+  reviewing/adding to existing ones), so there's no separate "+" control
+  just to log a point's first problem. Closed issues are kept, not
+  deleted, so the history of what went wrong and got fixed on a point
+  isn't lost.
 - **Equipment headers also show an open-issue count** (grid group headers,
   mobile equipment headers, and the Dashboard's equipment rows) whenever at
   least one of that equipment's points has an open issue — the same kind of
   at-a-glance summary the existing Install/Commissioning percent pills
   already provide.
 
-The **Dashboard** (`web/src/views/ProjectDashboard.tsx`, opened via the
-header's **Dashboard** button) is a project-wide rollup, not a narrowed
+The **Dashboard** (`web/src/views/ProjectDashboard.tsx`) is the app's
+landing page — opening a project goes straight to the project-wide rollup,
+not into one panel's checklist, since a status check is the more common
+first thing a tech or supervisor wants. The header's **Dashboard** button
+and each view's own path back (the grid/phone view's own navigation, or
+the Dashboard's own **← Back to Points** button) move between it and the
+working grid/phone view. It's a project-wide rollup, not a narrowed
 working view — same architectural slot as the print report, a purpose-built
 screen rather than a responsive reflow of the grid. It splits every piece of
 equipment into **Not Commissioned** / **Commissioned** by an exact check
@@ -175,6 +182,14 @@ removed/inactive point cluttering "which devices still need work" would be
 actively misleading. A "Commissioning Activity" trend chart (points/issues
 completed over time) was scoped out of this pass — noted here as a natural
 follow-up, not built.
+
+Within the Dashboard specifically, an issue's own text (its description and
+recommended action, in the Active Issues panel) renders in red — the one
+screen whose whole job is triage, so the issue content itself is styled to
+stand out. This is scoped to the Dashboard (`.dashboard-view` in
+`styles.css`) rather than the shared text classes themselves, since those
+same classes render inside the Issues modal too, which keeps its normal
+text color there.
 
 ### Staying fresh across a shared shift
 
