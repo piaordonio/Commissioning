@@ -203,8 +203,10 @@ export function ProjectDashboard({
               sortedActiveIssueRows.map(({ issue, point, equipment: eq }) => (
                 <div key={issue.id} className="dashboard-issue-row">
                   <button type="button" className="dashboard-issue-row-main" onClick={() => onOpenIssues(point)}>
-                    <span className="mono">{resolvedPointNumber(point)}</span>
-                    <span className="muted-text"> {eq?.tag ?? ""}</span>
+                    <span>
+                      <span className="mono">{resolvedPointNumber(point)}</span> {point.descriptor}
+                    </span>
+                    <span className="muted-text">{eq?.tag ?? ""}</span>
                     <div className="issue-description">{issue.description}</div>
                     {issue.recommended_action && (
                       <div className="issue-recommended-action">
