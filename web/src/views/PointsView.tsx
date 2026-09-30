@@ -361,7 +361,7 @@ export function PointsView({
         <label className="toolbar-label" style={{ display: "flex", alignItems: "center", gap: 6 }}>
           Status
           <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as PointStatus | "")}>
-            <option value="">All Statuses</option>
+            <option value="">All Cx Status</option>
             {(Object.keys(POINT_STATUS_LABELS) as PointStatus[]).map((s) => (
               <option key={s} value={s}>
                 {POINT_STATUS_LABELS[s]}

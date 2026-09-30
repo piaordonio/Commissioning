@@ -126,7 +126,7 @@ export function PointsCardList({
           ))}
         </select>
         <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as PointStatus | "")}>
-          <option value="">All Statuses</option>
+          <option value="">All Cx Status</option>
           {(Object.keys(POINT_STATUS_LABELS) as PointStatus[]).map((s) => (
             <option key={s} value={s}>
               {POINT_STATUS_LABELS[s]}
