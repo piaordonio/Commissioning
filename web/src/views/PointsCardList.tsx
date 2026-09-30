@@ -57,6 +57,21 @@ export function PointsCardList({
   const [search, setSearch] = useState("");
   const [showInstall, setShowInstall] = useState(true);
   const [showCommissioning, setShowCommissioning] = useState(true);
+  // Collapsed by default, same reasoning as the header's Actions toggle --
+  // with many points on a job, showing just name + status flags per card
+  // lets you scan the list quickly and expand only the one you're actually
+  // standing at, rather than scrolling past a full checklist for every
+  // point. Independent per point (not an accordion), so more than one can
+  // be open if you're working two points at once.
+  const [expandedPointIds, setExpandedPointIds] = useState<Set<string>>(new Set());
+  const togglePoint = (id: string) => {
+    setExpandedPointIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   const installChecksByPointId = useMemo(
     () => new Map(installChecks.map((ic) => [ic.point_id, ic])),
@@ -178,6 +193,7 @@ export function PointsCardList({
                 </div>
                 {g.items.map((point) => {
                   const ic = installChecksByPointId.get(point.id);
+                  const isExpanded = expandedPointIds.has(point.id);
                   return (
                     <div
                       key={point.id}
@@ -198,99 +214,118 @@ export function PointsCardList({
                           🗑
                         </button>
                       </div>
-                      <div className="mobile-point-descriptor">
-                        {point.descriptor}
-                        {!point.active && <span className="muted-text"> (removed)</span>}
-                      </div>
-                      <div className="mobile-point-status-row">
-                        {showInstall && (
-                          <span className={`status-pill status-${installStatus(ic)}`}>
-                            Install: {INSTALL_STATUS_LABELS[installStatus(ic)]}
-                          </span>
-                        )}
-                        {showCommissioning && (
-                          <span className={`status-pill status-${point.status}`}>
-                            Commissioning: {POINT_STATUS_LABELS[point.status]}
-                          </span>
-                        )}
-                        {showCommissioning && point.date_commissioned && (
-                          <span className="muted-text">{formatDateCommissioned(point.date_commissioned)}</span>
-                        )}
-                      </div>
-                      {point.on_controller === false && (
-                        <span className="controller-missing-pill">Not on Controller</span>
-                      )}
-                      {point.added_from_controller && (
-                        <span className="controller-added-pill">Added from Controller</span>
-                      )}
 
-                      {showInstall && (
-                        <div className="mobile-field-group">
-                          <div className="mobile-field-group-label column-group-install">Install</div>
-                          {INSTALL_FIELDS.map((field) => {
-                            const v = ic ? ic[field] : "";
-                            return (
-                              <button
-                                type="button"
-                                key={field}
-                                className={`mobile-field-row mobile-field-row-${v || "empty"}`}
-                                onClick={() => cycleInstall(point, field)}
-                              >
-                                <span>{INSTALL_FIELD_LABELS[field]}</span>
-                                <span className={`mobile-field-value checklist-${v || "empty"}`}>
-                                  {SYMBOL[v] || "—"}
-                                </span>
-                              </button>
-                            );
-                          })}
+                      <button
+                        type="button"
+                        className="mobile-point-summary"
+                        aria-expanded={isExpanded}
+                        onClick={() => togglePoint(point.id)}
+                      >
+                        <div className="mobile-point-summary-main">
+                          <div className="mobile-point-descriptor">
+                            {point.descriptor}
+                            {!point.active && <span className="muted-text"> (removed)</span>}
+                          </div>
+                          <div className="mobile-point-status-row">
+                            {showInstall && (
+                              <span className={`status-pill status-${installStatus(ic)}`}>
+                                Install: {INSTALL_STATUS_LABELS[installStatus(ic)]}
+                              </span>
+                            )}
+                            {showCommissioning && (
+                              <span className={`status-pill status-${point.status}`}>
+                                Commissioning: {POINT_STATUS_LABELS[point.status]}
+                              </span>
+                            )}
+                            {showCommissioning && point.date_commissioned && (
+                              <span className="muted-text">{formatDateCommissioned(point.date_commissioned)}</span>
+                            )}
+                            {point.on_controller === false && (
+                              <span className="controller-missing-pill">Not on Controller</span>
+                            )}
+                            {point.added_from_controller && (
+                              <span className="controller-added-pill">Added from Controller</span>
+                            )}
+                          </div>
+                        </div>
+                        <span className="mobile-point-chevron" aria-hidden="true">
+                          {isExpanded ? "▲" : "▾"}
+                        </span>
+                      </button>
+
+                      {isExpanded && (
+                        <div className="mobile-point-body">
+                          {showInstall && (
+                            <div className="mobile-field-group">
+                              <div className="mobile-field-group-label column-group-install">Install</div>
+                              {INSTALL_FIELDS.map((field) => {
+                                const v = ic ? ic[field] : "";
+                                return (
+                                  <button
+                                    type="button"
+                                    key={field}
+                                    className={`mobile-field-row mobile-field-row-${v || "empty"}`}
+                                    onClick={() => cycleInstall(point, field)}
+                                  >
+                                    <span>{INSTALL_FIELD_LABELS[field]}</span>
+                                    <span className={`mobile-field-value checklist-${v || "empty"}`}>
+                                      {SYMBOL[v] || "—"}
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+
+                          {showCommissioning && (
+                            <div className="mobile-field-group">
+                              <div className="mobile-field-group-label column-group-commissioning">
+                                Commissioning
+                              </div>
+                              {CHECK_FIELDS.map((field) => {
+                                const v = point[field];
+                                return (
+                                  <button
+                                    type="button"
+                                    key={field}
+                                    className={`mobile-field-row mobile-field-row-${v || "empty"}`}
+                                    onClick={() => cycleCommissioning(point, field)}
+                                  >
+                                    <span>{CHECK_FIELD_LABELS[field]}</span>
+                                    <span className={`mobile-field-value checklist-${v || "empty"}`}>
+                                      {SYMBOL[v] || "—"}
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+
+                          <label className="mobile-text-field">
+                            Notes
+                            <input
+                              className="mobile-input"
+                              defaultValue={point.notes}
+                              placeholder="—"
+                              onBlur={(e) => {
+                                if (e.target.value !== point.notes) onUpdatePoint(point, { notes: e.target.value });
+                              }}
+                            />
+                          </label>
+                          <label className="mobile-text-field">
+                            Blocked By
+                            <input
+                              className={`mobile-input ${point.blocked_by ? "checklist-blocked" : ""}`}
+                              defaultValue={point.blocked_by}
+                              placeholder="—"
+                              onBlur={(e) => {
+                                if (e.target.value !== point.blocked_by)
+                                  onUpdatePoint(point, { blocked_by: e.target.value });
+                              }}
+                            />
+                          </label>
                         </div>
                       )}
-
-                      {showCommissioning && (
-                        <div className="mobile-field-group">
-                          <div className="mobile-field-group-label column-group-commissioning">Commissioning</div>
-                          {CHECK_FIELDS.map((field) => {
-                            const v = point[field];
-                            return (
-                              <button
-                                type="button"
-                                key={field}
-                                className={`mobile-field-row mobile-field-row-${v || "empty"}`}
-                                onClick={() => cycleCommissioning(point, field)}
-                              >
-                                <span>{CHECK_FIELD_LABELS[field]}</span>
-                                <span className={`mobile-field-value checklist-${v || "empty"}`}>
-                                  {SYMBOL[v] || "—"}
-                                </span>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      )}
-
-                      <label className="mobile-text-field">
-                        Notes
-                        <input
-                          className="mobile-input"
-                          defaultValue={point.notes}
-                          placeholder="—"
-                          onBlur={(e) => {
-                            if (e.target.value !== point.notes) onUpdatePoint(point, { notes: e.target.value });
-                          }}
-                        />
-                      </label>
-                      <label className="mobile-text-field">
-                        Blocked By
-                        <input
-                          className={`mobile-input ${point.blocked_by ? "checklist-blocked" : ""}`}
-                          defaultValue={point.blocked_by}
-                          placeholder="—"
-                          onBlur={(e) => {
-                            if (e.target.value !== point.blocked_by)
-                              onUpdatePoint(point, { blocked_by: e.target.value });
-                          }}
-                        />
-                      </label>
                     </div>
                   );
                 })}

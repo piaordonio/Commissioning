@@ -775,6 +775,44 @@ textarea {
   gap: 6px;
 }
 
+/* The tap target for expanding a card -- name/descriptor and status flags
+   stay visible collapsed (see .mobile-point-header above, always shown),
+   the checklist fields and Notes/Blocked By live in .mobile-point-body
+   below and only mount when expanded. */
+.mobile-point-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  padding: 0;
+  border: none;
+  background: none;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mobile-point-summary-main {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.mobile-point-chevron {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.mobile-point-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
 .mobile-field-group {
   display: flex;
   flex-direction: column;
