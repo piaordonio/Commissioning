@@ -1095,7 +1095,7 @@ textarea {
   margin-top: 8px;
 }
 
-.issue-notes-field {
+.issue-field {
   display: flex;
   flex-direction: column;
   gap: 4px;

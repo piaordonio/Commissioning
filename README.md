@@ -169,15 +169,19 @@ built for a multi-person team.
   already provide. The icon is a solid red circle with "!" (`.issue-icon`
   in `styles.css`), not a Unicode warning-triangle character, so it renders
   identically everywhere instead of varying by platform/font.
-- **Notes is edited by opening an issue's card, and only ever surfaces in
-  the printed Issues report** — not on the Dashboard. Each issue in the
-  modal's list is collapsed by default (just its description and a
-  chevron); clicking it reveals Recommended Action and an editable Notes
-  field (saved on blur, same pattern as the grid's Notes/Blocked By
-  inputs). It's for handoff-document context (a vendor ticket number, a
-  scheduled follow-up date) that doesn't need to be in view for every
-  issue in the list all the time, so it's opt-in per issue and stays off
-  the Dashboard, only appearing on the document meant to leave the
+- **Recommended Action and Notes are edited by opening an issue's card.**
+  Each issue in the modal's list is collapsed by default (just its
+  description and a chevron); clicking it reveals both fields, editable
+  and saved on blur (same pattern as the grid's Notes/Blocked By inputs).
+  Description stays fixed once an issue is created — it's the identifying
+  statement of the problem, set once in the add form — but the recommended
+  fix and any report notes are rarely fully known while you're still
+  describing a fresh problem, so both can be filled in or revised later.
+  Notes additionally only ever surfaces in the printed Issues report, not
+  on the Dashboard — it's for handoff-document context (a vendor ticket
+  number, a scheduled follow-up date) that doesn't need to be in view for
+  every issue in the list all the time, so it's opt-in per issue and stays
+  off the Dashboard, only appearing on the document meant to leave the
   building.
 - **`closed_at` autofills the moment an issue is closed.** Same
   trigger-owned pattern as `points.date_commissioned` — `set_issue_closed_at()`

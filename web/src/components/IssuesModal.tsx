@@ -4,12 +4,14 @@ import { formatTimestamp } from "../formatDate";
 
 // Wrapped by the generic <Modal> from App.tsx, same pattern as
 // VerifyControllerModal/ImportMdbModal -- this component owns the form and
-// list, not the overlay/close button. No inline editing of description/
-// recommended_action here: not asked for. Notes is the one exception --
-// editable, but only once an issue exists and its card is opened (see
-// expandedIssueIds below), not at creation time in the add form, since
-// notes tends to be an afterthought/report annotation rather than
-// something you'd write while still describing a fresh problem.
+// list, not the overlay/close button. Description is fixed once an issue
+// is created (not asked for): it's the identifying statement of the
+// problem, set once in the add form. Recommended Action and Notes are
+// both editable after creation, but only once an issue exists and its
+// card is opened (see expandedIssueIds below) -- neither tends to be
+// fully known while you're still describing a fresh problem, so editing
+// them later rather than only at creation matches how the information
+// actually arrives.
 export function IssuesModal({
   point,
   equipmentTag,
@@ -17,6 +19,7 @@ export function IssuesModal({
   onAdd,
   onSetStatus,
   onDelete,
+  onUpdateRecommendedAction,
   onUpdateNotes,
 }: {
   point: Point;
@@ -25,6 +28,7 @@ export function IssuesModal({
   onAdd: (pointId: string, description: string, recommendedAction: string) => void;
   onSetStatus: (issueId: string, status: IssueStatus) => void;
   onDelete: (issue: Issue) => void;
+  onUpdateRecommendedAction: (issueId: string, recommendedAction: string) => void;
   onUpdateNotes: (issueId: string, notes: string) => void;
 }) {
   const [description, setDescription] = useState("");
@@ -135,13 +139,20 @@ export function IssuesModal({
 
                 {isExpanded && (
                   <div className="issue-body">
-                    {issue.recommended_action && (
-                      <div className="issue-recommended-action">
-                        <span className="muted-text">Recommended: </span>
-                        {issue.recommended_action}
-                      </div>
-                    )}
-                    <label className="issue-notes-field">
+                    <label className="issue-field">
+                      Recommended Action
+                      <textarea
+                        key={`${issue.id}-recommended-action`}
+                        defaultValue={issue.recommended_action}
+                        placeholder="What needs to happen to fix it?"
+                        rows={2}
+                        onBlur={(e) => {
+                          if (e.target.value !== issue.recommended_action)
+                            onUpdateRecommendedAction(issue.id, e.target.value);
+                        }}
+                      />
+                    </label>
+                    <label className="issue-field">
                       Notes (shown on the printed Issues report only)
                       <textarea
                         key={`${issue.id}-notes`}

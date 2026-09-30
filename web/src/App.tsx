@@ -203,6 +203,13 @@ export default function App() {
     api.update<Issue>("issues", issueId, { status }).catch(() => refreshAll());
   };
 
+  const updateIssueRecommendedAction = (issueId: string, recommendedAction: string) => {
+    setIssues((list) =>
+      list.map((i) => (i.id === issueId ? { ...i, recommended_action: recommendedAction } : i))
+    );
+    api.update<Issue>("issues", issueId, { recommended_action: recommendedAction }).catch(() => refreshAll());
+  };
+
   const updateIssueNotes = (issueId: string, notes: string) => {
     setIssues((list) => list.map((i) => (i.id === issueId ? { ...i, notes } : i)));
     api.update<Issue>("issues", issueId, { notes }).catch(() => refreshAll());
@@ -485,6 +492,7 @@ export default function App() {
                 onAdd={addIssue}
                 onSetStatus={setIssueStatus}
                 onDelete={deleteIssue}
+                onUpdateRecommendedAction={updateIssueRecommendedAction}
                 onUpdateNotes={updateIssueNotes}
               />
             </Modal>
