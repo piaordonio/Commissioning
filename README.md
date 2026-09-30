@@ -442,9 +442,15 @@ the generation date, points/percent complete, and a "Commissioned By"
 dropdown you pick from right before printing. Names typed in via "+ Add
 name…" are remembered in that browser's `localStorage` (not saved to the
 project — it's who ran *this* check, a per-machine convenience, not
-project data shared across techs). A "Hide Date Commissioned column"
-checkbox in the toolbar drops that column from the printed table when a
-handoff doesn't need it — neither control prints itself (`no-print`).
+project data shared across techs). The ✎ / 🗑 buttons next to the dropdown
+rename or remove whichever name is currently selected (disabled when
+nothing's selected) — for a typo in a name, or someone who's left the
+team, without leaving stale or wrong names permanently cluttering this
+browser's list. Both only ever touch this per-browser list, never any
+project data or a previously printed report. A "Hide Date Commissioned
+column" checkbox in the toolbar drops that column from the printed table
+when a handoff doesn't need it — neither control prints itself
+(`no-print`).
 
 A **Status** filter (three checkboxes: Not Started / In Progress /
 Commissioned, all checked by default) controls which rows print — the

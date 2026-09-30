@@ -206,6 +206,42 @@ export function PointsReport({
                 ))}
                 <option value="__add__">+ Add name…</option>
               </select>
+              <button
+                type="button"
+                className="icon-btn"
+                title="Edit selected name"
+                aria-label="Edit selected name"
+                disabled={!commissionedBy}
+                onClick={() => {
+                  const edited = window.prompt("Edit name", commissionedBy)?.trim();
+                  if (!edited || edited === commissionedBy) return;
+                  const next = commissionedByNames
+                    .filter((n) => n !== commissionedBy)
+                    .concat(edited)
+                    .sort((a, b) => a.localeCompare(b));
+                  setCommissionedByNames(next);
+                  saveCommissionedByNames(next);
+                  setCommissionedBy(edited);
+                }}
+              >
+                ✎
+              </button>
+              <button
+                type="button"
+                className="icon-btn"
+                title="Remove selected name from the list"
+                aria-label="Remove selected name from the list"
+                disabled={!commissionedBy}
+                onClick={() => {
+                  if (!window.confirm(`Remove "${commissionedBy}" from this browser's name list?`)) return;
+                  const next = commissionedByNames.filter((n) => n !== commissionedBy);
+                  setCommissionedByNames(next);
+                  saveCommissionedByNames(next);
+                  setCommissionedBy("");
+                }}
+              >
+                🗑
+              </button>
             </label>
           </>
         ) : (

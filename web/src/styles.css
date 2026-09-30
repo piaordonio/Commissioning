@@ -135,6 +135,10 @@ button {
   font-size: 16px;
   color: var(--text-muted);
 }
+.icon-btn:disabled {
+  cursor: default;
+  opacity: 0.35;
+}
 
 .toolbar {
   display: flex;
