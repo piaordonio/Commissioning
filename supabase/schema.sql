@@ -113,9 +113,34 @@ create table if not exists install_checks (
 -- nothing requires it to go.
 alter table install_checks add column if not exists notes text not null default '';
 
+-- Structured, multi-entry issue log per point -- additive to (and
+-- independent of) the existing points.blocked_by free-text field, which
+-- stays exactly as-is and is never migrated into this table. Deliberately
+-- minimal: description, recommended_action, and a bare open/closed status
+-- -- no priority, assignee, part number, or per-issue comment trail.
+-- status is purely informational: it is never read by
+-- set_point_status_and_date() below and never gates a point's
+-- commissioning status. Closed issues are kept, not deleted, so history
+-- isn't lost -- same non-destructive ethos as points.active/equipment.active,
+-- just encoded in this status column rather than a separate active flag.
+create table if not exists issues (
+  id uuid primary key default gen_random_uuid(),
+  point_id uuid not null references points(id) on delete cascade,
+  description text not null default '',
+  recommended_action text not null default '',
+  status text not null default 'open' check (status in ('open', 'closed')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create index if not exists idx_equipment_project on equipment(project_id);
 create index if not exists idx_points_equipment on points(equipment_id);
 create index if not exists idx_install_checks_point on install_checks(point_id);
+create index if not exists idx_issues_point on issues(point_id);
+-- Speeds "open issues for this point/project" lookups -- both the per-point
+-- flag and the Dashboard's project-wide Active Issues panel filter on
+-- status = 'open' across many rows at once.
+create index if not exists idx_issues_open on issues(status) where status = 'open';
 
 -- ---- Keep updated_at current on every UPDATE, regardless of caller ----
 
@@ -143,6 +168,10 @@ create trigger trg_points_updated_at before update on points
 
 drop trigger if exists trg_install_checks_updated_at on install_checks;
 create trigger trg_install_checks_updated_at before update on install_checks
+  for each row execute function set_updated_at();
+
+drop trigger if exists trg_issues_updated_at on issues;
+create trigger trg_issues_updated_at before update on issues
   for each row execute function set_updated_at();
 
 -- Every point gets a blank install_checks row for free the moment it's
@@ -536,6 +565,7 @@ alter table projects enable row level security;
 alter table equipment enable row level security;
 alter table points enable row level security;
 alter table install_checks enable row level security;
+alter table issues enable row level security;
 
 drop policy if exists "anon full access" on projects;
 create policy "anon full access" on projects for all using (true) with check (true);
@@ -548,6 +578,9 @@ create policy "anon full access" on points for all using (true) with check (true
 
 drop policy if exists "anon full access" on install_checks;
 create policy "anon full access" on install_checks for all using (true) with check (true);
+
+drop policy if exists "anon full access" on issues;
+create policy "anon full access" on issues for all using (true) with check (true);
 
 grant execute on function import_points(uuid, jsonb, jsonb) to anon, authenticated;
 grant execute on function bulk_set_points(jsonb) to anon, authenticated;

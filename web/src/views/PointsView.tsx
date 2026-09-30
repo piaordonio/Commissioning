@@ -9,6 +9,7 @@ import {
   INSTALL_FIELD_LABELS,
   InstallCheck,
   InstallField,
+  Issue,
   Point,
   POINT_STATUS_LABELS,
   PointStatus,
@@ -25,6 +26,7 @@ import { autoFitColumnWidth } from "../textWidth";
 import { formatDateCommissioned } from "../formatDate";
 import { SYMBOL, nextCheckState } from "../checklistCycle";
 import { usePointRows } from "../usePointRows";
+import { buildOpenIssueCountByEquipment, groupIssuesByPointId, openIssueCount } from "../issues";
 
 const BODY_FONT = '13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
 const HEADER_FONT = '600 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
@@ -59,22 +61,26 @@ export function PointsView({
   points,
   equipment,
   installChecks,
+  issues,
   onSetValue,
   onBulkSetValues,
   onSetInstallValue,
   onBulkSetInstallValues,
   onUpdatePoint,
   onDeletePoint,
+  onOpenIssues,
 }: {
   points: Point[];
   equipment: Equipment[];
   installChecks: InstallCheck[];
+  issues: Issue[];
   onSetValue: (pointId: string, field: CheckField, value: CheckState) => void;
   onBulkSetValues: (updates: { id: string; field: string; value: string }[]) => void;
   onSetInstallValue: (pointId: string, field: InstallField, value: CheckState) => void;
   onBulkSetInstallValues: (updates: { id: string; field: string; value: string }[]) => void;
   onUpdatePoint: (point: Point, patch: Partial<Point>) => void;
   onDeletePoint: (point: Point) => void;
+  onOpenIssues: (point: Point) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const clipboardRef = useRef<CheckState[][] | null>(null);
@@ -92,6 +98,7 @@ export function PointsView({
     () => new Map(installChecks.map((ic) => [ic.point_id, ic])),
     [installChecks]
   );
+  const issuesByPointId = useMemo(() => groupIssuesByPointId(issues), [issues]);
 
   const { equipmentById, activePoints, removedCount, panelOptions, rows, groups } = usePointRows(
     points,
@@ -114,6 +121,10 @@ export function PointsView({
   const installProgressByEquipment = useMemo(
     () => buildInstallProgressByEquipment(activePoints, installChecksByPointId),
     [activePoints, installChecksByPointId]
+  );
+  const openIssueCountByEquipment = useMemo(
+    () => buildOpenIssueCountByEquipment(activePoints, issuesByPointId),
+    [activePoints, issuesByPointId]
   );
 
   const rowIndexById = useMemo(() => {
@@ -489,6 +500,15 @@ export function PointsView({
                         >
                           Commissioning {pct}%
                         </span>
+                        {(openIssueCountByEquipment.get(g.equipmentId) ?? 0) > 0 && (
+                          <>
+                            {" "}
+                            <span className="issue-count-pill">
+                              ⚠ {openIssueCountByEquipment.get(g.equipmentId)} open issue
+                              {openIssueCountByEquipment.get(g.equipmentId) === 1 ? "" : "s"}
+                            </span>
+                          </>
+                        )}
                       </td>
                     </tr>
                     {g.items.map((point) => {
@@ -571,6 +591,28 @@ export function PointsView({
                                 if (e.target.value !== point.blocked_by) onUpdatePoint(point, { blocked_by: e.target.value });
                               }}
                             />
+                            {(() => {
+                              const openCount = openIssueCount(issuesByPointId.get(point.id));
+                              return (
+                                <button
+                                  type="button"
+                                  className={`icon-btn issue-flag ${openCount > 0 ? "issue-flag-active" : ""}`}
+                                  title={
+                                    openCount > 0
+                                      ? `${openCount} open issue${openCount === 1 ? "" : "s"}`
+                                      : "No open issues — click to add one"
+                                  }
+                                  aria-label="Issues"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onOpenIssues(point);
+                                  }}
+                                  onKeyDown={(e) => e.stopPropagation()}
+                                >
+                                  {openCount > 0 ? `⚠ ${openCount}` : "⚑"}
+                                </button>
+                              );
+                            })()}
                           </td>
                           <td>
                             {point.on_controller === false && (

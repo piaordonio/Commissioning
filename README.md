@@ -122,6 +122,59 @@ A few things worth knowing if you're touching this:
   instead), since pasting Install data onto Commissioning cells wouldn't
   mean anything.
 
+## An issue log per point, and a project Dashboard
+
+Alongside the two checklists, each point can carry a structured, multi-entry
+**issue log** — `description`, `recommended_action`, and an `open`/`closed`
+status (see `issues` in `supabase/schema.sql`, `web/src/issues.ts`,
+`web/src/components/IssuesModal.tsx`). This is deliberately minimal, not full
+parity with something like EnteliWEB's commissioning issue tracker — no
+priority, assignee, part number, or per-issue comment trail — because a
+single tech tracking their own punch list doesn't need a triage workflow
+built for a multi-person team.
+
+- **Additive, not a replacement for Blocked By.** `points.blocked_by` stays
+  exactly as it was — a single free-text field. Issues are a different data
+  shape (a point can accumulate several distinct problems over time, some
+  resolved, some not) rather than something that fits in one text field, so
+  it gets its own table instead of overloading `blocked_by` or migrating it.
+- **Status is informational only.** A point's Commissioning `status` keeps
+  being computed purely from the 7 checklist fields — `set_point_status_and_
+  date()` never looks at `issues`. Letting an open issue gate "Commissioned"
+  would make that word mean two different things depending on whether an
+  issue happened to exist; commissioning completeness and "does this point
+  have a known problem" are answers to two different questions.
+- **A flag next to Blocked By does double duty.** An always-visible button
+  sits beside the Blocked By field in both the grid and the phone view —
+  neutral (⚑) when a point has no open issues, a warning badge with the open
+  count (⚠ N) the moment it does. Clicking it in either state opens the same
+  issue log (creating the first issue, or reviewing/adding to existing
+  ones), so there's no separate "+" control just to log a point's first
+  problem. Closed issues are kept, not deleted, so the history of what went
+  wrong and got fixed on a point isn't lost.
+- **Equipment headers also show an open-issue count** (grid group headers,
+  mobile equipment headers, and the Dashboard's equipment rows) whenever at
+  least one of that equipment's points has an open issue — the same kind of
+  at-a-glance summary the existing Install/Commissioning percent pills
+  already provide.
+
+The **Dashboard** (`web/src/views/ProjectDashboard.tsx`, opened via the
+header's **Dashboard** button) is a project-wide rollup, not a narrowed
+working view — same architectural slot as the print report, a purpose-built
+screen rather than a responsive reflow of the grid. It splits every piece of
+equipment into **Not Commissioned** / **Commissioned** by an exact check
+(every point's status is `commissioned` — not a rounded percentage, so a
+99%-but-not-100% device doesn't misleadingly read as done), click-expands
+each row inline to show its points, and lists every open issue project-wide
+in an **Active Issues** panel for quick triage. It reuses `usePointRows()` —
+the same equipment-grouping/filtering hook the grid and phone view already
+share — with `showRemoved: false` and no filter UI, rather than reinventing
+grouping a third time; this is meant as a live status overview, where a
+removed/inactive point cluttering "which devices still need work" would be
+actively misleading. A "Commissioning Activity" trend chart (points/issues
+completed over time) was scoped out of this pass — noted here as a natural
+follow-up, not built.
+
 ## A separate phone view for the field
 
 Opening this on a phone (viewport width ≤ 480px, checked live via

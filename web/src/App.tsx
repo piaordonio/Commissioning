@@ -6,17 +6,20 @@ import { VerifyControllerModal } from "./components/VerifyControllerModal";
 import { PointsReport } from "./components/PointsReport";
 import { PointsView } from "./views/PointsView";
 import { PointsCardList } from "./views/PointsCardList";
+import { ProjectDashboard } from "./views/ProjectDashboard";
+import { IssuesModal } from "./components/IssuesModal";
 import { averageProgress } from "./progress";
 import { averageInstallProgress } from "./installProgress";
 import { resolvedPointNumber } from "./pointNumber";
 import { useIsNarrowViewport } from "./useIsNarrowViewport";
-import { CheckField, CheckState, Equipment, InstallCheck, InstallField, Point, Project } from "./types";
+import { CheckField, CheckState, Equipment, InstallCheck, InstallField, Issue, IssueStatus, Point, Project } from "./types";
 
 export default function App() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [equipment, setEquipment] = useState<Equipment[]>([]);
   const [points, setPoints] = useState<Point[]>([]);
   const [installChecks, setInstallChecks] = useState<InstallCheck[]>([]);
+  const [issues, setIssues] = useState<Issue[]>([]);
   const [projectId, setProjectId] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -25,6 +28,8 @@ export default function App() {
   const [printing, setPrinting] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [showDashboard, setShowDashboard] = useState(false);
+  const [issuesModalPointId, setIssuesModalPointId] = useState<string | null>(null);
   // Collapsed by default on a narrow header -- these are desk-oriented
   // actions (importing an .mdb, checking against a controller export,
   // printing) rarely needed mid-field-check, so they start out of the way
@@ -42,6 +47,7 @@ export default function App() {
       setEquipment([]);
       setPoints([]);
       setInstallChecks([]);
+      setIssues([]);
       return;
     }
     const [eq, pts] = await Promise.all([
@@ -50,7 +56,13 @@ export default function App() {
     ]);
     setEquipment(eq);
     setPoints(pts);
-    setInstallChecks(await api.listInstallChecks<InstallCheck>(pts.map((p) => p.id)));
+    const pointIds = pts.map((p) => p.id);
+    const [checks, iss] = await Promise.all([
+      api.listInstallChecks<InstallCheck>(pointIds),
+      api.listIssues<Issue>(pointIds),
+    ]);
+    setInstallChecks(checks);
+    setIssues(iss);
   };
 
   useEffect(() => {
@@ -117,6 +129,28 @@ export default function App() {
       return Array.from(byPointId.values());
     });
     api.bulkSetInstallChecks(updates).catch(() => refreshAll());
+  };
+
+  // Not optimistic, unlike the setters above -- this codebase has no
+  // client-side temp-id convention (every api.create call site, e.g.
+  // addControllerObjectAsPoint, awaits the real row first), so this waits
+  // for the created row too rather than inventing one.
+  const addIssue = async (pointId: string, description: string, recommendedAction: string) => {
+    try {
+      const created = await api.create<Issue>("issues", {
+        point_id: pointId,
+        description,
+        recommended_action: recommendedAction,
+      });
+      setIssues((list) => [...list, created]);
+    } catch (err: any) {
+      setError(err.message ?? "Failed to add issue");
+    }
+  };
+
+  const setIssueStatus = (issueId: string, status: IssueStatus) => {
+    setIssues((list) => list.map((i) => (i.id === issueId ? { ...i, status } : i)));
+    api.update<Issue>("issues", issueId, { status }).catch(() => refreshAll());
   };
 
   const deletePoint = async (point: Point) => {
@@ -187,6 +221,18 @@ export default function App() {
             <span className="progress-pill">Commissioning {overallPct}%</span>
           </>
         )}
+        {/* Outside .app-actions-group and never collapsed at narrow widths,
+            unlike the desk-bound actions below -- this is a frequently-
+            consulted read view, the same tier as switching to the card
+            list, not a rare action worth hiding behind "Actions ▾". */}
+        <button
+          type="button"
+          className="btn-secondary"
+          disabled={!projectId}
+          onClick={() => setShowDashboard(true)}
+        >
+          Dashboard
+        </button>
         <div className="spacer" />
         {isNarrowViewport && (
           <button
@@ -222,27 +268,41 @@ export default function App() {
       <div className="app-main">
         {printing && currentProject ? (
           <PointsReport project={currentProject} equipment={equipment} points={points} onBack={() => setPrinting(false)} />
+        ) : showDashboard ? (
+          <ProjectDashboard
+            points={points}
+            equipment={equipment}
+            installChecks={installChecks}
+            issues={issues}
+            onSetIssueStatus={setIssueStatus}
+            onOpenIssues={(point) => setIssuesModalPointId(point.id)}
+            onBack={() => setShowDashboard(false)}
+          />
         ) : isNarrowViewport ? (
           <PointsCardList
             points={points}
             equipment={equipment}
             installChecks={installChecks}
+            issues={issues}
             onSetValue={setPointValue}
             onSetInstallValue={setInstallValue}
             onUpdatePoint={updatePoint}
             onDeletePoint={deletePoint}
+            onOpenIssues={(point) => setIssuesModalPointId(point.id)}
           />
         ) : (
           <PointsView
             points={points}
             equipment={equipment}
             installChecks={installChecks}
+            issues={issues}
             onSetValue={setPointValue}
             onBulkSetValues={bulkSetPoints}
             onSetInstallValue={setInstallValue}
             onBulkSetInstallValues={bulkSetInstallValues}
             onUpdatePoint={updatePoint}
             onDeletePoint={deletePoint}
+            onOpenIssues={(point) => setIssuesModalPointId(point.id)}
           />
         )}
       </div>
@@ -329,6 +389,27 @@ export default function App() {
           />
         </Modal>
       )}
+
+      {issuesModalPointId &&
+        (() => {
+          const point = points.find((p) => p.id === issuesModalPointId);
+          if (!point) return null;
+          const eq = equipment.find((e) => e.id === point.equipment_id);
+          return (
+            <Modal
+              title={`Issues — ${resolvedPointNumber(point)}`}
+              onClose={() => setIssuesModalPointId(null)}
+            >
+              <IssuesModal
+                point={point}
+                equipmentTag={eq?.tag ?? ""}
+                issues={issues.filter((i) => i.point_id === point.id)}
+                onAdd={addIssue}
+                onSetStatus={setIssueStatus}
+              />
+            </Modal>
+          );
+        })()}
     </div>
   );
 }

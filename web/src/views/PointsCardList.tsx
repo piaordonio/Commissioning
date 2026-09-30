@@ -9,6 +9,7 @@ import {
   INSTALL_FIELD_LABELS,
   InstallCheck,
   InstallField,
+  Issue,
   Point,
   POINT_STATUS_LABELS,
   PointStatus,
@@ -24,6 +25,7 @@ import { resolvedPointNumber, displayPanel } from "../pointNumber";
 import { formatDateCommissioned } from "../formatDate";
 import { SYMBOL, nextCheckState } from "../checklistCycle";
 import { usePointRows } from "../usePointRows";
+import { buildOpenIssueCountByEquipment, groupIssuesByPointId, openIssueCount } from "../issues";
 
 // The phone-width counterpart to PointsView.tsx -- same data and handler
 // shapes, entirely different markup. PointsView.tsx's grid is real <table>
@@ -37,18 +39,22 @@ export function PointsCardList({
   points,
   equipment,
   installChecks,
+  issues,
   onSetValue,
   onSetInstallValue,
   onUpdatePoint,
   onDeletePoint,
+  onOpenIssues,
 }: {
   points: Point[];
   equipment: Equipment[];
   installChecks: InstallCheck[];
+  issues: Issue[];
   onSetValue: (pointId: string, field: CheckField, value: CheckState) => void;
   onSetInstallValue: (pointId: string, field: InstallField, value: CheckState) => void;
   onUpdatePoint: (point: Point, patch: Partial<Point>) => void;
   onDeletePoint: (point: Point) => void;
+  onOpenIssues: (point: Point) => void;
 }) {
   const [showRemoved, setShowRemoved] = useState(false);
   const [panelFilter, setPanelFilter] = useState("");
@@ -81,6 +87,7 @@ export function PointsCardList({
     () => new Map(installChecks.map((ic) => [ic.point_id, ic])),
     [installChecks]
   );
+  const issuesByPointId = useMemo(() => groupIssuesByPointId(issues), [issues]);
 
   const { equipmentById, activePoints, removedCount, panelOptions, rows, groups } = usePointRows(
     points,
@@ -93,6 +100,10 @@ export function PointsCardList({
   const installProgressByEquipment = useMemo(
     () => buildInstallProgressByEquipment(activePoints, installChecksByPointId),
     [activePoints, installChecksByPointId]
+  );
+  const openIssueCountByEquipment = useMemo(
+    () => buildOpenIssueCountByEquipment(activePoints, issuesByPointId),
+    [activePoints, issuesByPointId]
   );
 
   const cycleInstall = (point: Point, field: InstallField) => {
@@ -207,6 +218,12 @@ export function PointsCardList({
                   >
                     Commissioning {pct}%
                   </span>
+                  {(openIssueCountByEquipment.get(g.equipmentId) ?? 0) > 0 && (
+                    <span className="issue-count-pill">
+                      ⚠ {openIssueCountByEquipment.get(g.equipmentId)} open issue
+                      {openIssueCountByEquipment.get(g.equipmentId) === 1 ? "" : "s"}
+                    </span>
+                  )}
                 </div>
                 {g.items.map((point) => {
                   const ic = installChecksByPointId.get(point.id);
@@ -339,15 +356,35 @@ export function PointsCardList({
                           </label>
                           <label className="mobile-text-field">
                             Blocked By
-                            <input
-                              className={`mobile-input ${point.blocked_by ? "checklist-blocked" : ""}`}
-                              defaultValue={point.blocked_by}
-                              placeholder="—"
-                              onBlur={(e) => {
-                                if (e.target.value !== point.blocked_by)
-                                  onUpdatePoint(point, { blocked_by: e.target.value });
-                              }}
-                            />
+                            <div className="mobile-input-row">
+                              <input
+                                className={`mobile-input ${point.blocked_by ? "checklist-blocked" : ""}`}
+                                defaultValue={point.blocked_by}
+                                placeholder="—"
+                                onBlur={(e) => {
+                                  if (e.target.value !== point.blocked_by)
+                                    onUpdatePoint(point, { blocked_by: e.target.value });
+                                }}
+                              />
+                              {(() => {
+                                const openCount = openIssueCount(issuesByPointId.get(point.id));
+                                return (
+                                  <button
+                                    type="button"
+                                    className={`icon-btn issue-flag ${openCount > 0 ? "issue-flag-active" : ""}`}
+                                    title={
+                                      openCount > 0
+                                        ? `${openCount} open issue${openCount === 1 ? "" : "s"}`
+                                        : "No open issues — tap to add one"
+                                    }
+                                    aria-label="Issues"
+                                    onClick={() => onOpenIssues(point)}
+                                  >
+                                    {openCount > 0 ? `⚠ ${openCount}` : "⚑"}
+                                  </button>
+                                );
+                              })()}
+                            </div>
                           </label>
                         </div>
                       )}

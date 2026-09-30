@@ -468,6 +468,37 @@ textarea {
   color: #166534;
 }
 
+/* Always-visible flag/entry-point next to Blocked By -- neutral outline by
+   default, switches to a warning badge with the open count the moment the
+   point has an open issue. Deliberately a different color family than
+   .controller-missing-pill's red so the two alerts don't read as
+   identical at a glance. */
+.issue-flag {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--text-muted);
+  background: white;
+}
+.issue-flag-active {
+  border-color: #fdba74;
+  background: #ffedd5;
+  color: #9a3412;
+}
+
+.issue-count-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  background: #ffedd5;
+  color: #9a3412;
+}
+
 .status-pill {
   display: inline-block;
   padding: 2px 8px;
@@ -486,6 +517,14 @@ textarea {
 }
 .status-commissioned,
 .status-complete {
+  background: #dcfce7;
+  color: #166534;
+}
+.status-open {
+  background: #fef3c7;
+  color: #92400e;
+}
+.status-closed {
   background: #dcfce7;
   color: #166534;
 }
@@ -894,6 +933,18 @@ textarea {
   font-weight: 600;
 }
 
+.mobile-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.mobile-input-row .mobile-input {
+  flex: 1;
+}
+.mobile-input-row .issue-flag {
+  flex-shrink: 0;
+}
+
 .app-actions-group {
   display: flex;
   align-items: center;
@@ -933,4 +984,164 @@ textarea {
   .app-actions-group button {
     flex: 1 1 auto;
   }
+}
+
+/* Issues modal -- add form + per-point issue list, wrapped by the generic
+   <Modal>. .form/.form label/.form-actions are the existing modal-form
+   classes (see Modal.tsx callers); this only adds the list below the form. */
+.issue-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.issue-row {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.issue-row-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.issue-toggle-btn {
+  padding: 3px 10px;
+  font-size: 12px;
+}
+
+.issue-description {
+  font-size: 13px;
+}
+
+.issue-recommended-action {
+  margin-top: 4px;
+  font-size: 12px;
+}
+
+/* Project Dashboard -- a project-wide rollup screen, same architectural
+   slot as PointsReport.tsx. Grid layout stacks to one column below the
+   breakpoint instead of a separate mobile component, since the content
+   (equipment rows, issue rows) is already compact/scrollable. */
+.dashboard-view {
+  gap: 14px;
+}
+
+.dashboard-summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.dashboard-columns {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  overflow: auto;
+  flex: 1;
+}
+@media (min-width: 900px) {
+  .dashboard-columns {
+    grid-template-columns: 1fr 1fr 1fr;
+    align-items: start;
+  }
+}
+
+.dashboard-column {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dashboard-column-header {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text-muted);
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+.dashboard-equipment-row-wrap {
+  border-bottom: 1px solid var(--border);
+}
+.dashboard-equipment-row-wrap:last-child {
+  border-bottom: none;
+}
+
+.dashboard-equipment-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  border: none;
+  background: none;
+  cursor: pointer;
+  padding: 8px 4px;
+  text-align: left;
+  font-family: inherit;
+  color: var(--text);
+}
+.dashboard-equipment-row:hover {
+  background: #f8fafc;
+}
+
+.dashboard-equipment-tag {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.dashboard-equipment-points {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 2px 4px 10px 16px;
+}
+
+.dashboard-point-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+
+.dashboard-point-descriptor {
+  flex: 1;
+}
+
+.dashboard-issues-panel {
+  gap: 10px;
+}
+
+.dashboard-issue-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.dashboard-issue-row-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+  font-family: inherit;
+  color: var(--text);
 }

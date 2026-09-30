@@ -130,3 +130,24 @@ export type InstallCheck = {
   created_at: string;
   updated_at: string;
 } & Record<InstallField, CheckState>;
+
+export type IssueStatus = "open" | "closed";
+
+export const ISSUE_STATUS_LABELS: Record<IssueStatus, string> = {
+  open: "Open",
+  closed: "Closed",
+};
+
+// Belongs to exactly one point (point_id FK, cascade delete with the
+// point) -- independent of Point.blocked_by, which stays a plain free-text
+// field. A point can have any number of issues, open or closed; see
+// web/src/issues.ts for the rollup helpers built on top of this.
+export interface Issue {
+  id: string;
+  point_id: string;
+  description: string;
+  recommended_action: string;
+  status: IssueStatus;
+  created_at: string;
+  updated_at: string;
+}

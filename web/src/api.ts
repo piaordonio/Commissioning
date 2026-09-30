@@ -49,15 +49,29 @@ export const api = {
     return assertNoError(data as T[] | null, error);
   },
 
+  // issues, like install_checks, carry no project_id -- fetched by the
+  // point ids the caller already has from listPoints(). Unlike
+  // install_checks (exactly one row per point), a point can have zero or
+  // many issue rows.
+  listIssues: async <T>(pointIds: string[]): Promise<T[]> => {
+    if (pointIds.length === 0) return [];
+    const { data, error } = await supabase
+      .from("issues")
+      .select("*")
+      .in("point_id", pointIds)
+      .order("created_at");
+    return assertNoError(data as T[] | null, error);
+  },
+
   // `as any`: this client isn't wired to Supabase's generated Database types
   // (no schema codegen step for a project this size), so .insert()/.update()
   // have nothing to structurally check Partial<T> against.
-  create: async <T>(table: "projects" | "equipment" | "points", data: Partial<T>): Promise<T> => {
+  create: async <T>(table: "projects" | "equipment" | "points" | "issues", data: Partial<T>): Promise<T> => {
     const { data: row, error } = await supabase.from(table).insert(data as any).select().single();
     return assertNoError(row as T | null, error);
   },
 
-  update: async <T>(table: "projects" | "equipment" | "points", id: string, data: Partial<T>): Promise<T> => {
+  update: async <T>(table: "projects" | "equipment" | "points" | "issues", id: string, data: Partial<T>): Promise<T> => {
     const { data: row, error } = await supabase.from(table).update(data as any).eq("id", id).select().single();
     return assertNoError(row as T | null, error);
   },
