@@ -467,7 +467,7 @@ export function PointsView({
                 <th className="divider-left" style={{ width: notesColWidth }}>
                   Notes
                 </th>
-                <th>Blocked By</th>
+                <th className="divider-left">Blocked By</th>
                 <th>Controller</th>
                 <th></th>
               </tr>
@@ -581,7 +581,11 @@ export function PointsView({
                               }}
                             />
                           </td>
-                          <td className={`checklist-text-col ${point.blocked_by ? "checklist-blocked" : ""}`}>
+                          <td
+                            className={`divider-left checklist-text-col ${
+                              point.blocked_by ? "checklist-blocked" : ""
+                            }`}
+                          >
                             <input
                               key={`${point.id}-blocked`}
                               className="checklist-inline-input"
