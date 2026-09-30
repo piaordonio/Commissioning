@@ -12,7 +12,7 @@ import {
   Project,
 } from "../types";
 import { buildProgressByEquipment, averageProgress } from "../progress";
-import { buildIssueRows } from "../issues";
+import { buildIssueRows, groupIssuesByPointId, openIssueCount } from "../issues";
 import { resolvedPointNumber, displayPanel } from "../pointNumber";
 import { formatDateCommissioned, formatTimestamp } from "../formatDate";
 
@@ -113,6 +113,12 @@ export function PointsReport({
     () => buildIssueRows(issues, activePoints, equipmentById, { includeClosed: includeClosedIssues }),
     [issues, activePoints, equipmentById, includeClosedIssues]
   );
+
+  // Checklist mode's own flag, separate from the Issues-mode punch list above
+  // -- a supervisor reading just the Checklist table still gets a visual cue
+  // that a point needs issue-log attention, same "!" the live grid/mobile
+  // view already show next to Blocked By.
+  const issuesByPointId = useMemo(() => groupIssuesByPointId(issues), [issues]);
 
   const issueGroups = useMemo(() => {
     const sorted = [...issueRows].sort((a, b) => {
@@ -361,7 +367,14 @@ export function PointsReport({
                             </td>
                           )}
                           <td className="report-col-notes divider-left">{point.notes || "—"}</td>
-                          <td className="report-col-blocked">{point.blocked_by || "—"}</td>
+                          <td className="report-col-blocked">
+                            {openIssueCount(issuesByPointId.get(point.id)) > 0 && (
+                              <span className="issue-icon" title="Open issue">
+                                !
+                              </span>
+                            )}{" "}
+                            {point.blocked_by || "—"}
+                          </td>
                         </tr>
                       ))}
                     </Fragment>
