@@ -56,6 +56,7 @@ export function PointsCardList({
   onDeletePoint,
   onOpenIssues,
   onSetAttributeValue,
+  onSetStatus,
 }: {
   projectId: string;
   points: Point[];
@@ -72,6 +73,7 @@ export function PointsCardList({
   onDeletePoint: (point: Point) => void;
   onOpenIssues: (point: Point) => void;
   onSetAttributeValue: (pointId: string, attributeId: string, value: string) => void;
+  onSetStatus: (pointId: string, status: PointStatus) => void;
 }) {
   const [showRemoved, setShowRemoved] = useState(false);
   const [panelFilter, setPanelFilter] = useState("");
@@ -121,7 +123,10 @@ export function PointsCardList({
     { showRemoved, panelFilter, statusFilter, installStatusFilter, search }
   );
 
-  const progressByEquipment = useMemo(() => buildProgressByEquipment(activePoints), [activePoints]);
+  const progressByEquipment = useMemo(
+    () => buildProgressByEquipment(activePoints, attrs, attrValueMap),
+    [activePoints, attrs, attrValueMap]
+  );
   const installProgressByEquipment = useMemo(
     () => buildInstallProgressByEquipment(activePoints, installChecksByPointId),
     [activePoints, installChecksByPointId]
@@ -369,6 +374,15 @@ export function PointsCardList({
                                   </button>
                                 );
                               })}
+                              <button
+                                type="button"
+                                className="btn-secondary mark-commissioned-btn"
+                                onClick={() =>
+                                  onSetStatus(point.id, point.status === "commissioned" ? "in_progress" : "commissioned")
+                                }
+                              >
+                                {point.status === "commissioned" ? "Revert to In Progress" : "Mark Commissioned"}
+                              </button>
                             </div>
                           )}
 
@@ -395,7 +409,10 @@ export function PointsCardList({
                                 const value = getAttributeValue(attrValueMap, point.id, attr.id);
                                 const options = optionsForAttribute(pointAttributeOptions, attr.id);
                                 return (
-                                  <label key={attr.id} className="mobile-text-field">
+                                  <label
+                                    key={attr.id}
+                                    className={`mobile-text-field ${value !== value.trim() ? "attr-stray-whitespace" : ""}`}
+                                  >
                                     {attr.short_text || attr.name}
                                     {options.length > 0 ? (
                                       <select

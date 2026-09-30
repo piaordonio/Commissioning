@@ -10,6 +10,7 @@ import { ProjectDashboard } from "./views/ProjectDashboard";
 import { AttributesAdmin } from "./views/AttributesAdmin";
 import { IssuesModal } from "./components/IssuesModal";
 import { averageProgress } from "./progress";
+import { attributesForProject, buildAttributeValueMap } from "./pointAttributes";
 import { averageInstallProgress } from "./installProgress";
 import { resolvedPointNumber } from "./pointNumber";
 import { useIsNarrowViewport } from "./useIsNarrowViewport";
@@ -26,6 +27,7 @@ import {
   PointAttributeOption,
   PointAttributeProject,
   PointAttributeValue,
+  PointStatus,
   Project,
 } from "./types";
 
@@ -197,6 +199,21 @@ export default function App() {
   const updatePoint = (point: Point, patch: Partial<Point>) => {
     setPoints((list) => list.map((p) => (p.id === point.id ? { ...p, ...patch } : p)));
     api.update<Point>("points", point.id, patch).catch(() => refreshAll());
+  };
+
+  // "Mark Commissioned"/"Revert to In Progress" -- a deliberate sign-off
+  // action, not the rapid-fire checklist cycling setPointValue above
+  // handles, so this isn't optimistic: the server's trigger logic
+  // (set_point_status_and_date() in supabase/schema.sql) decides the real
+  // resulting status and date_commissioned, and applying its actual
+  // response is simpler and more correct than guessing it client-side.
+  const setPointStatus = async (pointId: string, status: PointStatus) => {
+    try {
+      const updated = await api.update<Point>("points", pointId, { status });
+      setPoints((list) => list.map((p) => (p.id === pointId ? updated : p)));
+    } catch (err: any) {
+      setError(err.message ?? "Failed to update status");
+    }
   };
 
   const setInstallValue = (pointId: string, field: InstallField, value: CheckState) => {
@@ -379,7 +396,15 @@ export default function App() {
   // pills, e.g. a renumbered-and-reimported point sitting inactive at 0%
   // shouldn't make an otherwise-100%-complete project read as less than 100%.
   const activePoints = useMemo(() => points.filter((p) => p.active), [points]);
-  const overallPct = useMemo(() => Math.round(averageProgress(activePoints) * 100), [activePoints]);
+  const projectAttrs = useMemo(
+    () => attributesForProject(pointAttributes, pointAttributeProjects, projectId),
+    [pointAttributes, pointAttributeProjects, projectId]
+  );
+  const attrValueMap = useMemo(() => buildAttributeValueMap(pointAttributeValues), [pointAttributeValues]);
+  const overallPct = useMemo(
+    () => Math.round(averageProgress(activePoints, projectAttrs, attrValueMap) * 100),
+    [activePoints, projectAttrs, attrValueMap]
+  );
   const installChecksByPointId = useMemo(
     () => new Map(installChecks.map((ic) => [ic.point_id, ic])),
     [installChecks]
@@ -514,10 +539,14 @@ export default function App() {
           />
         ) : showDashboard ? (
           <ProjectDashboard
+            projectId={projectId}
             points={points}
             equipment={equipment}
             installChecks={installChecks}
             issues={issues}
+            pointAttributes={pointAttributes}
+            pointAttributeProjects={pointAttributeProjects}
+            pointAttributeValues={pointAttributeValues}
             onSetIssueStatus={setIssueStatus}
             onOpenIssues={(point) => setIssuesModalPointId(point.id)}
             onBack={() => setShowDashboard(false)}
@@ -539,6 +568,7 @@ export default function App() {
             onDeletePoint={deletePoint}
             onOpenIssues={(point) => setIssuesModalPointId(point.id)}
             onSetAttributeValue={setAttributeValue}
+            onSetStatus={setPointStatus}
           />
         ) : (
           <PointsView
@@ -560,6 +590,7 @@ export default function App() {
             onOpenIssues={(point) => setIssuesModalPointId(point.id)}
             onSetAttributeValue={setAttributeValue}
             onBulkSetAttributeValues={bulkSetAttributeValues}
+            onSetStatus={setPointStatus}
           />
         )}
       </div>

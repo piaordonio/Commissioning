@@ -1,8 +1,19 @@
 import { useMemo, useState } from "react";
-import { Equipment, InstallCheck, Issue, IssueStatus, Point, POINT_STATUS_LABELS } from "../types";
+import {
+  Equipment,
+  InstallCheck,
+  Issue,
+  IssueStatus,
+  Point,
+  PointAttribute,
+  PointAttributeProject,
+  PointAttributeValue,
+  POINT_STATUS_LABELS,
+} from "../types";
 import { averageProgress, buildProgressByEquipment } from "../progress";
 import { averageInstallProgress, buildInstallProgressByEquipment } from "../installProgress";
 import { buildActiveIssueRows, buildOpenIssueCountByEquipment, groupIssuesByPointId, openIssueCount } from "../issues";
+import { attributesForProject, buildAttributeValueMap } from "../pointAttributes";
 import { PointGroup, usePointRows } from "../usePointRows";
 import { resolvedPointNumber } from "../pointNumber";
 
@@ -12,18 +23,26 @@ import { resolvedPointNumber } from "../pointNumber";
 // usePointRows() (showRemoved: false, no other filters) instead of
 // reinventing equipment-grouping a third time.
 export function ProjectDashboard({
+  projectId,
   points,
   equipment,
   installChecks,
   issues,
+  pointAttributes,
+  pointAttributeProjects,
+  pointAttributeValues,
   onSetIssueStatus,
   onOpenIssues,
   onBack,
 }: {
+  projectId: string;
   points: Point[];
   equipment: Equipment[];
   installChecks: InstallCheck[];
   issues: Issue[];
+  pointAttributes: PointAttribute[];
+  pointAttributeProjects: PointAttributeProject[];
+  pointAttributeValues: PointAttributeValue[];
   onSetIssueStatus: (issueId: string, status: IssueStatus) => void;
   onOpenIssues: (point: Point) => void;
   onBack: () => void;
@@ -54,9 +73,18 @@ export function ProjectDashboard({
     search: "",
   });
 
-  const overallPct = Math.round(averageProgress(activePoints) * 100);
+  const projectAttrs = useMemo(
+    () => attributesForProject(pointAttributes, pointAttributeProjects, projectId),
+    [pointAttributes, pointAttributeProjects, projectId]
+  );
+  const attrValueMap = useMemo(() => buildAttributeValueMap(pointAttributeValues), [pointAttributeValues]);
+
+  const overallPct = Math.round(averageProgress(activePoints, projectAttrs, attrValueMap) * 100);
   const overallInstallPct = Math.round(averageInstallProgress(activePoints, installChecksByPointId) * 100);
-  const progressByEquipment = useMemo(() => buildProgressByEquipment(activePoints), [activePoints]);
+  const progressByEquipment = useMemo(
+    () => buildProgressByEquipment(activePoints, projectAttrs, attrValueMap),
+    [activePoints, projectAttrs, attrValueMap]
+  );
   const installProgressByEquipment = useMemo(
     () => buildInstallProgressByEquipment(activePoints, installChecksByPointId),
     [activePoints, installChecksByPointId]

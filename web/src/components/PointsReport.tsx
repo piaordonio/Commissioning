@@ -101,8 +101,23 @@ export function PointsReport({
   const visiblePoints = useMemo(() => activePoints.filter((p) => statusFilter[p.status]), [activePoints, statusFilter]);
   const statusFilterActive = !statusFilter.not_started || !statusFilter.in_progress || !statusFilter.commissioned;
   const equipmentById = useMemo(() => Object.fromEntries(equipment.map((e) => [e.id, e])), [equipment]);
-  const progressByEquipment = useMemo(() => buildProgressByEquipment(activePoints), [activePoints]);
-  const overallPct = Math.round(averageProgress(activePoints) * 100);
+
+  // Custom attribute columns, printed after the fixed checklist fields --
+  // every attribute assigned to this project, unconditionally (not only
+  // ones with data among the visible points), matching EnteliWEB's own
+  // unconditional column behavior. Computed before progressByEquipment/
+  // overallPct below since both now factor attributes into % Completed too.
+  const attrs = useMemo(
+    () => attributesForProject(pointAttributes, pointAttributeProjects, project.id),
+    [pointAttributes, pointAttributeProjects, project.id]
+  );
+  const attrValueMap = useMemo(() => buildAttributeValueMap(pointAttributeValues), [pointAttributeValues]);
+
+  const progressByEquipment = useMemo(
+    () => buildProgressByEquipment(activePoints, attrs, attrValueMap),
+    [activePoints, attrs, attrValueMap]
+  );
+  const overallPct = Math.round(averageProgress(activePoints, attrs, attrValueMap) * 100);
 
   const groups = useMemo(() => {
     const sorted = [...visiblePoints].sort((a, b) => {
@@ -129,16 +144,6 @@ export function PointsReport({
   // that a point needs issue-log attention, same "!" the live grid/mobile
   // view already show next to Blocked By.
   const issuesByPointId = useMemo(() => groupIssuesByPointId(issues), [issues]);
-
-  // Custom attribute columns, printed after the fixed checklist fields --
-  // every attribute assigned to this project, unconditionally (not only
-  // ones with data among the visible points), matching EnteliWEB's own
-  // unconditional column behavior.
-  const attrs = useMemo(
-    () => attributesForProject(pointAttributes, pointAttributeProjects, project.id),
-    [pointAttributes, pointAttributeProjects, project.id]
-  );
-  const attrValueMap = useMemo(() => buildAttributeValueMap(pointAttributeValues), [pointAttributeValues]);
 
   const issueGroups = useMemo(() => {
     const sorted = [...issueRows].sort((a, b) => {

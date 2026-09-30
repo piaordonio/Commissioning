@@ -79,6 +79,7 @@ export function PointsView({
   onOpenIssues,
   onSetAttributeValue,
   onBulkSetAttributeValues,
+  onSetStatus,
 }: {
   projectId: string;
   points: Point[];
@@ -98,6 +99,7 @@ export function PointsView({
   onOpenIssues: (point: Point) => void;
   onSetAttributeValue: (pointId: string, attributeId: string, value: string) => void;
   onBulkSetAttributeValues: (updates: { point_id: string; point_attribute_id: string; value: string }[]) => void;
+  onSetStatus: (pointId: string, status: PointStatus) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const clipboardRef = useRef<CheckState[][] | null>(null);
@@ -159,7 +161,10 @@ export function PointsView({
   // Progress reflects the current design regardless of the toggle below —
   // a removed point shouldn't count toward (or against) completion just
   // because it's temporarily visible for review.
-  const progressByEquipment = useMemo(() => buildProgressByEquipment(activePoints), [activePoints]);
+  const progressByEquipment = useMemo(
+    () => buildProgressByEquipment(activePoints, projectAttrs, attrValueMap),
+    [activePoints, projectAttrs, attrValueMap]
+  );
   const installProgressByEquipment = useMemo(
     () => buildInstallProgressByEquipment(activePoints, installChecksByPointId),
     [activePoints, installChecksByPointId]
@@ -663,10 +668,21 @@ export function PointsView({
                                   </td>
                                 );
                               })}
-                              <td className="divider-left">
+                              <td className="divider-left status-cell">
                                 <span className={`status-pill status-${point.status}`}>
                                   {POINT_STATUS_LABELS[point.status]}
                                 </span>
+                                <button
+                                  type="button"
+                                  className="btn-secondary mark-commissioned-btn"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onSetStatus(point.id, point.status === "commissioned" ? "in_progress" : "commissioned");
+                                  }}
+                                  onKeyDown={(e) => e.stopPropagation()}
+                                >
+                                  {point.status === "commissioned" ? "Revert" : "Mark Commissioned"}
+                                </button>
                               </td>
                               <td className="divider-left">{formatDateCommissioned(point.date_commissioned)}</td>
                             </>
@@ -696,7 +712,7 @@ export function PointsView({
                                     key={`attr-${attr.id}`}
                                     className={`checklist-text-col ${
                                       i === 0 && booleanAttributes.length === 0 ? "divider-left" : ""
-                                    }`}
+                                    } ${value !== value.trim() ? "attr-stray-whitespace" : ""}`}
                                   >
                                     {options.length > 0 ? (
                                       <select

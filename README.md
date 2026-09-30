@@ -16,28 +16,36 @@ copy-paste across cells, or type `c` / `x` / `n` / `0` to bulk-fill a
 selection). Alongside it is a separate **Install** checklist for the
 installer's own paper checksheet — see "Two checklists, one grid" below.
 
-Two more columns summarize the Commissioning checklist for you, both
-maintained entirely by a Postgres trigger (`set_point_status_and_date()` in
-`supabase/schema.sql`) — never written directly by the app, so they stay
-correct no matter which code path touches a checklist field (a single
-click, a bulk range-fill, a re-import match, a renumber pairing). This is
+Two more columns summarize the Commissioning checklist for you. This is
 Commissioning-only — Install doesn't get its own Status/Date columns, just
 the weighted percent described below:
 
-- **Status** — a colored pill: **Not Started** (nothing checked yet),
-  **In Progress** (at least one field checked), or **Commissioned** (every
-  non-N/A field checked — an N/A field counts as satisfied, same as it
-  already does in the progress-percent calculation, so an all-applicable-
-  checked point reads Commissioned the same way it already reads 100%
-  elsewhere in this app).
-- **Date Commissioned** — auto-fills with today's date the moment a point's
-  status becomes Commissioned, and auto-clears if it later drops back out
-  (a field gets unchecked to correct a mistake, or a re-inspection fails
-  something) — it always reflects current status, not a permanent
-  first-achieved record.
+- **Status** — a colored pill: **Not Started** (nothing checked yet) and
+  **In Progress** (at least one field checked) are auto-computed exactly
+  like before, from the 7 fixed fields only. **Commissioned is a manual
+  action**, not an automatic one — even checking every field (or marking
+  the rest N/A) only gets a point to In Progress; a **Mark Commissioned**
+  button next to the pill is the deliberate sign-off. This changed because
+  custom attributes (below) now count toward the % Completed pill, and a
+  fixed formula for "Commissioned" couldn't both agree with that pill and
+  stay a rigid, automatic rule — see the Custom Point Attributes section
+  for why. Once commissioned, editing *any* tracked field afterward — one
+  of the 7 fixed fields, or a custom attribute — automatically reverts the
+  point back to the auto-computed bucket (a **Revert** button on an
+  already-commissioned point does the same thing manually, with no field
+  edit needed). All of this is still maintained entirely by a Postgres
+  trigger (`set_point_status_and_date()` in `supabase/schema.sql`, plus a
+  small cross-table trigger on `point_attribute_values` for the attribute
+  case) — never written directly by the app for the auto-computed states,
+  so Not Started/In Progress still stay correct no matter which code path
+  touches a checklist field.
+- **Date Commissioned** — auto-fills with today's date the moment a point
+  is marked Commissioned, and auto-clears the moment it reverts out (either
+  automatically, from an edit, or manually, via Revert) — it always
+  reflects current status, not a permanent first-achieved record.
 
-Both are display-only in the grid and the printed report — no click-to-cycle,
-no input.
+Both are display-only in the printed report — no click-to-cycle, no input
+there; the grid is where Mark Commissioned/Revert live.
 
 Points are grouped under **equipment** (a CP panel's direct points, or a
 zone/VAV instance), and equipment is grouped under a **project**, so the
@@ -161,11 +169,18 @@ calling out:
   attribute's type freely, but once `point_attribute_values` rows exist for it,
   changing the type would make old values (e.g. a stored `'check'`) semantically wrong
   and could trip the integrity trigger above on the next write to an old row.
-- **Informational only, same treatment as `issues.status`.** Custom attribute values
-  are never read by `set_point_status_and_date()` and never factored into
-  `pointProgress()`/`installProgress()` — a point's commissioning completeness stays
-  defined purely by the fixed 7-field checklist, regardless of what custom attributes
-  happen to be assigned to its project.
+- **Factored into % Completed, but never gates Commissioned itself.** Custom attribute
+  values count toward `pointProgress()` in `web/src/progress.ts` (Commissioning % only,
+  not Install — see "Two checklists, one grid" above) — Boolean attributes the same way
+  the 7 fixed fields already are, Text/Number as filled (trimmed non-empty) or not.
+  Reaching Commissioned itself is a manual action with no completeness gate (see "Two
+  checklists, one grid" above for why), but an attribute edit on an already-commissioned
+  point does revert it, same as editing one of the 7 fixed fields does — a small
+  cross-table trigger on `point_attribute_values` forces that re-evaluation, since an
+  attribute edit doesn't otherwise touch the `points` row at all. A text/number
+  attribute cell gets a light grey background when its value has a stray leading/
+  trailing space — that also doesn't count as "filled" for % Completed, so a value that
+  looks entered but is actually just whitespace doesn't silently pass as done.
 - **The printed report shows every attribute column assigned to the project,
   unconditionally** — not only the ones with data among the currently visible points.
   A column that silently disappeared between prints depending on which points happen

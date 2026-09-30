@@ -204,11 +204,14 @@ create table if not exists point_attribute_options (
 -- checklist-style value column in this schema being text, and enforced by
 -- check_point_attribute_value() below since a single shared column can't
 -- use a literal per-field CHECK constraint the way every fixed field does.
--- Informational/supplementary only, same as issues.status above: never
--- read by set_point_status_and_date() below, and never factored into
--- pointProgress()/installProgress() (web/src/progress.ts,
--- web/src/installProgress.ts) -- a point's commissioning completeness
--- stays defined purely by the fixed 7-field checklist.
+-- Factored into pointProgress() in web/src/progress.ts (not installProgress.ts --
+-- attributes sit in the Commissioning column group, not Install), and a value
+-- changing here can revert an already-Commissioned point back to In Progress
+-- via trg_point_attribute_values_revert_commissioned below -- but never gates
+-- *reaching* Commissioned in the first place, which is a manual action (see
+-- set_point_status_and_date() below). A point's commissioning completeness is
+-- no longer defined by a fixed formula at all; it's a human judgment call,
+-- informed by the % Completed pill (which this table does feed).
 create table if not exists point_attribute_values (
   point_id uuid not null references points(id) on delete cascade,
   point_attribute_id uuid not null references point_attributes(id) on delete cascade,
@@ -299,6 +302,27 @@ drop trigger if exists trg_point_attribute_values_check on point_attribute_value
 create trigger trg_point_attribute_values_check before insert or update on point_attribute_values
   for each row execute function check_point_attribute_value();
 
+-- Editing a custom attribute value has no effect on points.status by itself
+-- (no completeness gate -- see set_point_status_and_date() below), but if
+-- the point is ALREADY commissioned, any attribute edit should un-commission
+-- it, same as editing one of the 7 fixed fields does. This forces that
+-- re-evaluation: the UPDATE below re-fires the trigger on points, which then
+-- recomputes the real bucket from the point's current 7-field values. First
+-- cross-table trigger cascade in this schema.
+create or replace function revert_commissioned_on_attribute_change()
+returns trigger
+language plpgsql
+as $$
+begin
+  update points set status = 'in_progress' where id = new.point_id and status = 'commissioned';
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_point_attribute_values_revert_commissioned on point_attribute_values;
+create trigger trg_point_attribute_values_revert_commissioned after insert or update on point_attribute_values
+  for each row execute function revert_commissioned_on_attribute_change();
+
 -- Keeps closed_at in sync with status, regardless of which code path
 -- touched it -- same "trigger-owned, app never writes it directly" pattern
 -- as points.date_commissioned in set_point_status_and_date() below. Set
@@ -355,54 +379,103 @@ insert into install_checks (point_id, end_to_end)
   select id, end_to_end from points
   on conflict (point_id) do nothing;
 
--- ---- Keep status/date_commissioned in sync with the 7 checklist fields,
--- regardless of which code path touched them (a single cell edit, a
--- bulk-fill range, a re-import match, or a renumber pairing) ----
+-- ---- Not Started/In Progress track the 7 checklist fields automatically;
+-- Commissioned is a manual sign-off action ----
 -- (End-to-End moved to install_checks -- verified during Function Test
 -- rather than tracked as its own commissioning field, so it's excluded
 -- from this count.)
--- An N/A field counts as satisfied, matching pointProgress() in
--- web/src/progress.ts: N/A is excluded from the denominator there too,
--- so a point with everything applicable checked (N/A's aside) already
--- reads as fully complete elsewhere in this app -- Commissioned agrees
--- with that instead of introducing a stricter, inconsistent definition.
--- All 7 fields N/A is the same "vacuously complete" edge case
--- pointProgress() already treats as 100%, so it reads as Commissioned
--- here too. date_commissioned is set only on the transition into
--- Commissioned (never overwritten while already Commissioned, so it
--- doesn't reset on an unrelated edit) and cleared the moment the point
--- is no longer Commissioned -- it always reflects current status, not a
--- permanent first-achieved record.
-create or replace function set_point_status_and_date()
-returns trigger
+-- Not_started/in_progress only -- never returns 'commissioned', which is a
+-- manual-only state now (see set_point_status_and_date() below). Takes the
+-- whole row so both that trigger and the cross-table one on
+-- point_attribute_values can share this logic. An N/A field counts as
+-- satisfied, matching pointProgress() in web/src/progress.ts.
+create or replace function checklist_bucket(p points)
+returns text
 language plpgsql
+immutable
 as $$
 declare
   v_checked int;
   v_na int;
 begin
-  v_checked := (case when new.wired = 'check' then 1 else 0 end)
-             + (case when new.tagged = 'check' then 1 else 0 end)
-             + (case when new.calibrate = 'check' then 1 else 0 end)
-             + (case when new.function_test = 'check' then 1 else 0 end)
-             + (case when new.sequence = 'check' then 1 else 0 end)
-             + (case when new.alarm = 'check' then 1 else 0 end)
-             + (case when new.graphics = 'check' then 1 else 0 end);
-  v_na := (case when new.wired = 'na' then 1 else 0 end)
-        + (case when new.tagged = 'na' then 1 else 0 end)
-        + (case when new.calibrate = 'na' then 1 else 0 end)
-        + (case when new.function_test = 'na' then 1 else 0 end)
-        + (case when new.sequence = 'na' then 1 else 0 end)
-        + (case when new.alarm = 'na' then 1 else 0 end)
-        + (case when new.graphics = 'na' then 1 else 0 end);
+  v_checked := (case when p.wired = 'check' then 1 else 0 end)
+             + (case when p.tagged = 'check' then 1 else 0 end)
+             + (case when p.calibrate = 'check' then 1 else 0 end)
+             + (case when p.function_test = 'check' then 1 else 0 end)
+             + (case when p.sequence = 'check' then 1 else 0 end)
+             + (case when p.alarm = 'check' then 1 else 0 end)
+             + (case when p.graphics = 'check' then 1 else 0 end);
+  v_na := (case when p.wired = 'na' then 1 else 0 end)
+        + (case when p.tagged = 'na' then 1 else 0 end)
+        + (case when p.calibrate = 'na' then 1 else 0 end)
+        + (case when p.function_test = 'na' then 1 else 0 end)
+        + (case when p.sequence = 'na' then 1 else 0 end)
+        + (case when p.alarm = 'na' then 1 else 0 end)
+        + (case when p.graphics = 'na' then 1 else 0 end);
+  return case when v_checked = 0 then 'not_started' else 'in_progress' end;
+end;
+$$;
 
-  if v_checked = 7 - v_na then
-    new.status := 'commissioned';
+-- Commissioned used to be purely auto-computed (all 7 fields check/N/A). Now
+-- it's a deliberate action -- checking every box only gets a point to
+-- in_progress; a human explicitly sets status='commissioned' (see
+-- web/src/App.tsx's setPointStatus, a plain points update, no RPC) once
+-- they're satisfied, informed by the % Completed pill (which does include
+-- custom attributes -- see pointProgress() in web/src/progress.ts). There's
+-- deliberately no completeness gate here matching that pill: the tech's
+-- judgment call, not a rigid rule. Once commissioned, editing any of the 7
+-- fields (detected below) or an explicit non-commissioned status write (a
+-- manual "Revert" action) falls back to the auto-computed bucket and clears
+-- date_commissioned; editing anything else (Notes/Blocked By) leaves it
+-- untouched. A routine field edit never includes `status` in its SET list,
+-- so Postgres carries the old value into NEW automatically -- "did the
+-- client explicitly touch status" is simply new.status is distinct from
+-- old.status, no extra signaling needed. Existing Commissioned rows are
+-- grandfathered in without a migration: this logic leaves an
+-- already-commissioned row untouched on any write that doesn't change a
+-- tracked field, so nothing needs to re-run against existing data.
+create or replace function set_point_status_and_date()
+returns trigger
+language plpgsql
+as $$
+declare
+  v_fields_changed boolean;
+begin
+  if TG_OP = 'INSERT' then
+    new.status := checklist_bucket(new);
+    new.date_commissioned := null;
+    return new;
+  end if;
+
+  v_fields_changed :=
+    new.wired is distinct from old.wired
+    or new.tagged is distinct from old.tagged
+    or new.calibrate is distinct from old.calibrate
+    or new.function_test is distinct from old.function_test
+    or new.sequence is distinct from old.sequence
+    or new.alarm is distinct from old.alarm
+    or new.graphics is distinct from old.graphics;
+
+  if new.status = 'commissioned' and old.status is distinct from 'commissioned' and not v_fields_changed then
+    -- Explicit "Mark Commissioned" action from the client.
     if new.date_commissioned is null then
       new.date_commissioned := current_date;
     end if;
+  elsif old.status = 'commissioned' and (v_fields_changed or new.status is distinct from 'commissioned') then
+    -- Was commissioned; either a checklist field just changed, or the client
+    -- explicitly moved it off commissioned (a manual "Revert" action) --
+    -- either way fall back to the auto-computed bucket.
+    new.status := checklist_bucket(new);
+    new.date_commissioned := null;
+  elsif old.status = 'commissioned' and new.status = 'commissioned' then
+    -- Already commissioned, nothing tracked changed (e.g. a Notes/Blocked By
+    -- edit) -- leave status/date exactly as they are.
+    null;
   else
-    new.status := case when v_checked = 0 then 'not_started' else 'in_progress' end;
+    -- Normal path: never manually promoted. Tracks not_started/in_progress
+    -- only -- even 7-for-7 stays 'in_progress' until a human explicitly
+    -- marks it Commissioned.
+    new.status := checklist_bucket(new);
     new.date_commissioned := null;
   end if;
 
