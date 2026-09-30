@@ -50,10 +50,22 @@ export function buildActiveIssueRows(
   points: Point[],
   equipmentById: Record<string, Equipment>
 ): ActiveIssueRow[] {
+  return buildIssueRows(issues, points, equipmentById, { includeClosed: false });
+}
+
+/** Same shape as buildActiveIssueRows, generalized for the Issues report --
+ *  which needs the option to include resolved issues too (a closeout audit
+ *  trail, not just the live punch list). */
+export function buildIssueRows(
+  issues: Issue[],
+  points: Point[],
+  equipmentById: Record<string, Equipment>,
+  { includeClosed }: { includeClosed: boolean }
+): ActiveIssueRow[] {
   const pointsById = new Map(points.map((p) => [p.id, p]));
   const rows: ActiveIssueRow[] = [];
   for (const issue of issues) {
-    if (issue.status !== "open") continue;
+    if (issue.status !== "open" && !includeClosed) continue;
     const point = pointsById.get(issue.point_id);
     if (!point || !point.active) continue;
     rows.push({ issue, point, equipment: equipmentById[point.equipment_id] });

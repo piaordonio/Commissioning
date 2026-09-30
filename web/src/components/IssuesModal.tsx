@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { ISSUE_STATUS_LABELS, Issue, IssueStatus, Point } from "../types";
+import { formatTimestamp } from "../formatDate";
 
 // Wrapped by the generic <Modal> from App.tsx, same pattern as
 // VerifyControllerModal/ImportMdbModal -- this component owns the form and
@@ -76,6 +77,8 @@ export function IssuesModal({
             <div key={issue.id} className="issue-row">
               <div className="issue-row-header">
                 <span className={`status-pill status-${issue.status}`}>{ISSUE_STATUS_LABELS[issue.status]}</span>
+                <span className="muted-text">{formatTimestamp(issue.created_at)}</span>
+                <div className="spacer" />
                 <button
                   type="button"
                   className="btn-secondary issue-toggle-btn"

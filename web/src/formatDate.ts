@@ -8,3 +8,11 @@ export function formatDateCommissioned(iso: string | null): string {
   const [y, m, d] = iso.split("-").map(Number);
   return `${MONTH_ABBR[m - 1]}-${String(d).padStart(2, "0")}-${y}`;
 }
+
+// For a Postgres `timestamptz` (e.g. issues.created_at) -- unlike the plain
+// `date` case above, this already carries a real instant, so new Date(iso)
+// is safe and doesn't need the hand-parsing workaround.
+export function formatTimestamp(iso: string): string {
+  const d = new Date(iso);
+  return `${MONTH_ABBR[d.getMonth()]}-${String(d.getDate()).padStart(2, "0")}-${d.getFullYear()}`;
+}

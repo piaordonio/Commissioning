@@ -267,7 +267,13 @@ export default function App() {
 
       <div className="app-main">
         {printing && currentProject ? (
-          <PointsReport project={currentProject} equipment={equipment} points={points} onBack={() => setPrinting(false)} />
+          <PointsReport
+            project={currentProject}
+            equipment={equipment}
+            points={points}
+            issues={issues}
+            onBack={() => setPrinting(false)}
+          />
         ) : showDashboard ? (
           <ProjectDashboard
             points={points}

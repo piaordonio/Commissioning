@@ -591,6 +591,23 @@ textarea {
   white-space: nowrap;
 }
 
+/* Issues report mode only -- wider than Notes/Blocked By since a
+   description/recommended-action is prose, not a short flag. */
+.report-table th.report-col-issue-desc,
+.report-table td.report-col-issue-desc {
+  width: 220px;
+}
+
+.report-mode-toggle {
+  display: flex;
+  gap: 4px;
+}
+.btn-mode-active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
 .report-table .status-pill {
   font-size: 9px;
   padding: 2px 5px;
@@ -1005,7 +1022,6 @@ textarea {
 .issue-row-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
   margin-bottom: 6px;
 }

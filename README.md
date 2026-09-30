@@ -125,8 +125,9 @@ A few things worth knowing if you're touching this:
 ## An issue log per point, and a project Dashboard
 
 Alongside the two checklists, each point can carry a structured, multi-entry
-**issue log** — `description`, `recommended_action`, and an `open`/`closed`
-status (see `issues` in `supabase/schema.sql`, `web/src/issues.ts`,
+**issue log** — `description`, `recommended_action`, an `open`/`closed`
+status, and the date it was created (shown next to the status in the
+issue log itself) (see `issues` in `supabase/schema.sql`, `web/src/issues.ts`,
 `web/src/components/IssuesModal.tsx`). This is deliberately minimal, not full
 parity with something like EnteliWEB's commissioning issue tracker — no
 priority, assignee, part number, or per-issue comment trail — because a
@@ -402,6 +403,17 @@ anyway. The table also gets its own `.report-table-wrap` override
 height scroll panel, and without this override the flex column would
 shrink it and pop up a second, nested scrollbar next to the page's real
 one.
+
+A **Checklist / Issues** toggle in the toolbar switches the whole report
+between the per-field grid above and a second, differently-shaped report
+over the same project data: a punch list of every active point that has an
+issue logged against it (description, recommended action, status, and the
+date it was created), grouped by equipment the same way. It defaults to
+open issues only — the report you'd actually hand to a subcontractor —
+with an "Include closed issues" checkbox to pull resolved ones back in for
+a closeout record. This is a mode on the existing report rather than a
+second print flow, since both need the same project data and print CSS and
+neither needed its own screen.
 
 ## Stack
 
