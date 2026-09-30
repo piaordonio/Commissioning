@@ -206,11 +206,11 @@ export function ProjectDashboard({
             <div className="dashboard-column-header">
               Not Commissioned ({notCommissionedGroups.length})
               {notCommissionedGroups.length > 0 && (
-                <div className="dashboard-column-header-detail">
-                  {notCommissionedStatusCounts.commissioned} Commissioned,{" "}
+                <span className="dashboard-column-header-detail">
+                  — {notCommissionedStatusCounts.commissioned} Commissioned,{" "}
                   {notCommissionedStatusCounts.in_progress} In Progress,{" "}
                   {notCommissionedStatusCounts.not_started} Not Started
-                </div>
+                </span>
               )}
             </div>
             {notCommissionedGroups.length === 0 ? (
@@ -223,9 +223,9 @@ export function ProjectDashboard({
             <div className="dashboard-column-header">
               Commissioned ({commissionedGroups.length})
               {commissionedGroups.length > 0 && (
-                <div className="dashboard-column-header-detail">
-                  {commissionedStatusCounts.commissioned} points commissioned
-                </div>
+                <span className="dashboard-column-header-detail">
+                  — {commissionedStatusCounts.commissioned} points commissioned
+                </span>
               )}
             </div>
             {commissionedGroups.length === 0 ? (
