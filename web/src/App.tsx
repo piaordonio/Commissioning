@@ -176,13 +176,12 @@ export default function App() {
   // client-side temp-id convention (every api.create call site, e.g.
   // addControllerObjectAsPoint, awaits the real row first), so this waits
   // for the created row too rather than inventing one.
-  const addIssue = async (pointId: string, description: string, recommendedAction: string, notes: string) => {
+  const addIssue = async (pointId: string, description: string, recommendedAction: string) => {
     try {
       const created = await api.create<Issue>("issues", {
         point_id: pointId,
         description,
         recommended_action: recommendedAction,
-        notes,
       });
       setIssues((list) => [...list, created]);
     } catch (err: any) {
@@ -202,6 +201,11 @@ export default function App() {
       )
     );
     api.update<Issue>("issues", issueId, { status }).catch(() => refreshAll());
+  };
+
+  const updateIssueNotes = (issueId: string, notes: string) => {
+    setIssues((list) => list.map((i) => (i.id === issueId ? { ...i, notes } : i)));
+    api.update<Issue>("issues", issueId, { notes }).catch(() => refreshAll());
   };
 
   // A real delete, unlike points/equipment's soft-delete via `active` --
@@ -481,6 +485,7 @@ export default function App() {
                 onAdd={addIssue}
                 onSetStatus={setIssueStatus}
                 onDelete={deleteIssue}
+                onUpdateNotes={updateIssueNotes}
               />
             </Modal>
           );

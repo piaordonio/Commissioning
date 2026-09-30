@@ -169,12 +169,15 @@ built for a multi-person team.
   already provide. The icon is a solid red circle with "!" (`.issue-icon`
   in `styles.css`), not a Unicode warning-triangle character, so it renders
   identically everywhere instead of varying by platform/font.
-- **Notes is entered once, at creation, and only ever surfaces in the
-  printed Issues report** — not in the issue log's own list (the modal),
-  not on the Dashboard. It's for handoff-document context (a vendor ticket
-  number, a scheduled follow-up date) that doesn't need to be in view while
-  a tech is actually working the point, so it stays out of the compact
-  on-screen lists and only appears on the document meant to leave the
+- **Notes is edited by opening an issue's card, and only ever surfaces in
+  the printed Issues report** — not on the Dashboard. Each issue in the
+  modal's list is collapsed by default (just its description and a
+  chevron); clicking it reveals Recommended Action and an editable Notes
+  field (saved on blur, same pattern as the grid's Notes/Blocked By
+  inputs). It's for handoff-document context (a vendor ticket number, a
+  scheduled follow-up date) that doesn't need to be in view for every
+  issue in the list all the time, so it's opt-in per issue and stays off
+  the Dashboard, only appearing on the document meant to leave the
   building.
 - **`closed_at` autofills the moment an issue is closed.** Same
   trigger-owned pattern as `points.date_commissioned` — `set_issue_closed_at()`
