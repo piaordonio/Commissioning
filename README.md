@@ -176,6 +176,35 @@ actively misleading. A "Commissioning Activity" trend chart (points/issues
 completed over time) was scoped out of this pass — noted here as a natural
 follow-up, not built.
 
+### Staying fresh across a shared shift
+
+There's no realtime sync between browser tabs — this is deliberately a
+plain Supabase REST client, not a websocket subscription, so two techs on
+different points never conflict at the field level (every write only ever
+touches the specific fields it changed), but nothing pushes one tech's
+saves into a tab another tech already has open. Left unaddressed, a tab
+opened at 7am would keep showing 7am's Dashboard rollup and filter results
+all day. Three small refetches close that gap without the complexity of a
+realtime subscription (`web/src/App.tsx`):
+
+- **On window focus / tab visibility regained** — covers a tech switching
+  to another app and back, or a tablet waking from sleep. Debounced to
+  skip refetching if the last refresh was under 5 seconds ago, so rapid
+  focus/visibility events (common when a browser fires both in quick
+  succession) don't double up.
+- **On a 5-minute background poll**, only while the tab is actually
+  visible — catches a tab that's simply left open on a mounted tablet and
+  never backgrounded at all, where focus/visibility events never fire.
+- **Whenever the Dashboard opens** — its entire purpose is showing current
+  project state, so it gets a guaranteed fresh fetch on open rather than
+  relying on the background refresh above having happened to run recently.
+
+This is a staleness fix, not a conflict-resolution system — it doesn't
+merge concurrent edits or warn "someone else is editing this," it just
+makes sure an open tab doesn't drift far from reality. That's sufficient
+because techs work different points by convention, not because the app
+enforces or needs to enforce it.
+
 ## A separate phone view for the field
 
 Opening this on a phone (viewport width ≤ 480px, checked live via

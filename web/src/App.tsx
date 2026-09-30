@@ -92,6 +92,43 @@ export default function App() {
 
   const refreshAll = () => refreshProjectData(projectId).catch(() => {});
 
+  // Techs working different points never conflict at the field level (each
+  // write only ever touches the fields it changed), but nothing pushes one
+  // tech's saves into a tab another tech already has open -- filters and
+  // the Dashboard's rollup can silently drift stale across a shared shift.
+  // Refetch when this tab becomes the active one again (covers switching
+  // apps and coming back, a tablet waking from sleep) and on a slow
+  // background poll for a tab that's simply left open the whole time and
+  // never backgrounded at all.
+  useEffect(() => {
+    if (!projectId) return;
+    let lastRefresh = Date.now();
+    const refresh = () => {
+      lastRefresh = Date.now();
+      refreshAll();
+    };
+    const onWake = () => {
+      if (document.visibilityState === "visible" && Date.now() - lastRefresh > 5000) refresh();
+    };
+    window.addEventListener("focus", onWake);
+    document.addEventListener("visibilitychange", onWake);
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") refresh();
+    }, 5 * 60 * 1000);
+    return () => {
+      window.removeEventListener("focus", onWake);
+      document.removeEventListener("visibilitychange", onWake);
+      clearInterval(interval);
+    };
+  }, [projectId]);
+
+  // The Dashboard's entire job is showing current project state -- it gets
+  // its own guaranteed-fresh fetch on open rather than relying on the
+  // background refresh above having happened to run recently.
+  useEffect(() => {
+    if (showDashboard) refreshAll();
+  }, [showDashboard]);
+
   const setPointValue = (pointId: string, field: CheckField, value: CheckState) => {
     setPoints((list) => list.map((p) => (p.id === pointId ? { ...p, [field]: value } : p)));
     api.update<Point>("points", pointId, { [field]: value }).catch(() => refreshAll());
