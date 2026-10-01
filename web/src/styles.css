@@ -654,10 +654,14 @@ textarea {
   white-space: nowrap;
 }
 
+/* Plain text-align centering, not flex -- display: flex on a <td> breaks its
+   normal table-cell participation (row-height equalization with sibling
+   cells), which visibly misaligned this cell's row border against the rest
+   of the row. .status-pill is already display: inline-block, so
+   text-align: center on the <td> (and the existing default vertical-align:
+   middle from .data-table td) centers it with no flex needed. */
 .status-cell {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  text-align: center;
 }
 
 /* A text/number attribute value whose raw content differs from its trimmed
