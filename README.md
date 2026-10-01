@@ -20,32 +20,31 @@ Two more columns summarize the Commissioning checklist for you. This is
 Commissioning-only — Install doesn't get its own Status/Date columns, just
 the weighted percent described below:
 
-- **Status** — a colored pill: **Not Started** (nothing checked yet) and
-  **In Progress** (at least one field checked) are auto-computed exactly
-  like before, from the 7 fixed fields only. **Commissioned is a manual
-  action**, not an automatic one — even checking every field (or marking
-  the rest N/A) only gets a point to In Progress; a **Mark Commissioned**
-  button next to the pill is the deliberate sign-off. This changed because
-  custom attributes (below) now count toward the % Completed pill, and a
-  fixed formula for "Commissioned" couldn't both agree with that pill and
-  stay a rigid, automatic rule — see the Custom Point Attributes section
-  for why. Once commissioned, editing *any* tracked field afterward — one
-  of the 7 fixed fields, or a custom attribute — automatically reverts the
-  point back to the auto-computed bucket (a **Revert** button on an
-  already-commissioned point does the same thing manually, with no field
-  edit needed). All of this is still maintained entirely by a Postgres
-  trigger (`set_point_status_and_date()` in `supabase/schema.sql`, plus a
-  small cross-table trigger on `point_attribute_values` for the attribute
-  case) — never written directly by the app for the auto-computed states,
-  so Not Started/In Progress still stay correct no matter which code path
-  touches a checklist field.
+- **Status** — a colored pill, fully auto-computed, no manual sign-off step:
+  **Not Started** (nothing checked yet) and **In Progress** (at least one
+  field checked, but not all 7) come from the 7 fixed fields alone, exactly
+  as before. **Commissioned** now also requires every custom attribute
+  assigned to the point's project (below) to be complete — Boolean the same
+  check/N/A rule as the 7 fixed fields, Text/Number requiring an actual
+  entered value (N/A doesn't satisfy it there — see the Custom Point
+  Attributes section for why). The point recomputes the moment anything
+  relevant changes: one of the 7 fields, an attribute value, or an attribute
+  being assigned to or removed from the project — so assigning a new
+  attribute can immediately drop already-commissioned points back to In
+  Progress until it's filled in, and removing one can just as immediately
+  restore Commissioned on points it was the only thing holding back. All of
+  this is maintained entirely by a Postgres trigger
+  (`set_point_status_and_date()` / `full_bucket()` in `supabase/schema.sql`,
+  plus a cross-table trigger on `point_attribute_values` and a recompute in
+  `set_point_attribute_projects()` for the attribute-assignment case) —
+  never written directly by the app.
 - **Date Commissioned** — auto-fills with today's date the moment a point
-  is marked Commissioned, and auto-clears the moment it reverts out (either
-  automatically, from an edit, or manually, via Revert) — it always
-  reflects current status, not a permanent first-achieved record.
+  computes as Commissioned, and auto-clears the moment it no longer does —
+  it always reflects current status, not a permanent first-achieved record,
+  so re-reaching Commissioned later gets a fresh date, not the original one.
 
-Both are display-only in the printed report — no click-to-cycle, no input
-there; the grid is where Mark Commissioned/Revert live.
+Both are display-only in the printed report, same as everywhere else — there's
+no manual action anywhere in the app to click-to-cycle or override them.
 
 Points are grouped under **equipment** (a CP panel's direct points, or a
 zone/VAV instance), and equipment is grouped under a **project**, so the
@@ -169,7 +168,7 @@ calling out:
   attribute's type freely, but once `point_attribute_values` rows exist for it,
   changing the type would make old values (e.g. a stored `'check'`) semantically wrong
   and could trip the integrity trigger above on the next write to an old row.
-- **Factored into % Completed, but never gates Commissioned itself.** Custom attribute
+- **Factored into % Completed, and gates Commissioned itself.** Custom attribute
   values count toward `pointProgress()` in `web/src/progress.ts` (Commissioning % only,
   not Install — see "Two checklists, one grid" above) — Boolean attributes the same way
   the 7 fixed fields already are. Text/Number attributes have no explicit N/A state the
@@ -177,15 +176,21 @@ calling out:
   value (case-insensitive — `isAttrValueNA()` in `web/src/pointAttributes.ts`) is treated
   as not-yet-applicable: excluded from the % Completed denominator entirely (same
   treatment N/A already gets on the 7 fixed fields), and displayed as the literal text
-  "N/A" rather than blank — so assigning a new attribute to a project doesn't
-  retroactively ding every existing point's percentage until someone deliberately enters
-  a real value. Once a real value is entered it's always full credit — there's no
-  partial-credit concept for free text or a number. Reaching Commissioned itself is a
-  manual action with no completeness gate (see "Two checklists, one grid" above for
-  why), but an attribute edit on an already-commissioned point does revert it, same as
-  editing one of the 7 fixed fields does — a small cross-table trigger on
-  `point_attribute_values` forces that re-evaluation, since an attribute edit doesn't
-  otherwise touch the `points` row at all. A text/number attribute cell gets a light
+  "N/A" rather than blank. Once a real value is entered it's always full credit — there's
+  no partial-credit concept for free text or a number. Reaching Commissioned (see "Two
+  checklists, one grid" above) requires every attribute assigned to the point's project to
+  be complete, same as the 7 fixed fields — Boolean check/N/A satisfies it, Text/Number
+  needs a real value (N/A does *not* satisfy it here: `isAttrValueNA()` has no way to tell
+  "never touched" apart from "deliberately reviewed, doesn't apply", so there's no
+  attribute-type-safe way to let it pass the gate the way Boolean's na does — an attribute
+  that genuinely doesn't apply to some points needs a real, if trivial, value entered
+  there, or it shouldn't have been assigned to those points' project). Editing an
+  attribute value re-evaluates the point's status in either direction — completing the
+  last unfilled attribute can newly reach Commissioned, not just revert out of it — via a
+  cross-table trigger on `point_attribute_values`, since an attribute edit doesn't
+  otherwise touch the `points` row at all. Assigning or un-assigning an attribute from a
+  project (below) does the same for every point in it, immediately, not just the next
+  time someone happens to edit each point. A text/number attribute cell gets a light
   grey background when its value has a stray leading/trailing space — a value that
   looks entered but is actually just whitespace doesn't silently pass as done.
 - **Attribute columns sit right after Graphics, before Commissioning's own Status/Date

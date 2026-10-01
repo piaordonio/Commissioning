@@ -205,13 +205,13 @@ create table if not exists point_attribute_options (
 -- check_point_attribute_value() below since a single shared column can't
 -- use a literal per-field CHECK constraint the way every fixed field does.
 -- Factored into pointProgress() in web/src/progress.ts (not installProgress.ts --
--- attributes sit in the Commissioning column group, not Install), and a value
--- changing here can revert an already-Commissioned point back to In Progress
--- via trg_point_attribute_values_revert_commissioned below -- but never gates
--- *reaching* Commissioned in the first place, which is a manual action (see
--- set_point_status_and_date() below). A point's commissioning completeness is
--- no longer defined by a fixed formula at all; it's a human judgment call,
--- informed by the % Completed pill (which this table does feed).
+-- attributes sit in the Commissioning column group, not Install) AND into
+-- full_bucket() below, which gates Commissioned itself on every attribute
+-- assigned to the point's project being complete, same as the 7 fixed
+-- fields. A value changing here re-triggers that recomputation via
+-- trg_point_attribute_values_recompute_status below, in either direction --
+-- completing the last unfilled attribute can newly reach Commissioned here,
+-- not just revert out of it.
 create table if not exists point_attribute_values (
   point_id uuid not null references points(id) on delete cascade,
   point_attribute_id uuid not null references point_attributes(id) on delete cascade,
@@ -302,26 +302,28 @@ drop trigger if exists trg_point_attribute_values_check on point_attribute_value
 create trigger trg_point_attribute_values_check before insert or update on point_attribute_values
   for each row execute function check_point_attribute_value();
 
--- Editing a custom attribute value has no effect on points.status by itself
--- (no completeness gate -- see set_point_status_and_date() below), but if
--- the point is ALREADY commissioned, any attribute edit should un-commission
--- it, same as editing one of the 7 fixed fields does. This forces that
--- re-evaluation: the UPDATE below re-fires the trigger on points, which then
--- recomputes the real bucket from the point's current 7-field values. First
+-- Editing a custom attribute value has no column on points of its own to
+-- fire that table's BEFORE UPDATE trigger -- this forces that re-evaluation
+-- by touching the point row, which re-runs set_point_status_and_date() /
+-- full_bucket() against the point's current 7 fields AND (now-updated)
+-- attribute values, in either direction: completing the last unfilled
+-- attribute can newly promote a point to Commissioned here, same as editing
+-- one of the 7 fixed fields already does, not just revert out of it. First
 -- cross-table trigger cascade in this schema.
-create or replace function revert_commissioned_on_attribute_change()
+create or replace function recompute_point_status_on_attribute_change()
 returns trigger
 language plpgsql
 as $$
 begin
-  update points set status = 'in_progress' where id = new.point_id and status = 'commissioned';
+  update points set updated_at = now() where id = new.point_id;
   return new;
 end;
 $$;
 
 drop trigger if exists trg_point_attribute_values_revert_commissioned on point_attribute_values;
-create trigger trg_point_attribute_values_revert_commissioned after insert or update on point_attribute_values
-  for each row execute function revert_commissioned_on_attribute_change();
+drop trigger if exists trg_point_attribute_values_recompute_status on point_attribute_values;
+create trigger trg_point_attribute_values_recompute_status after insert or update on point_attribute_values
+  for each row execute function recompute_point_status_on_attribute_change();
 
 -- Keeps closed_at in sync with status, regardless of which code path
 -- touched it -- same "trigger-owned, app never writes it directly" pattern
@@ -379,24 +381,32 @@ insert into install_checks (point_id, end_to_end)
   select id, end_to_end from points
   on conflict (point_id) do nothing;
 
--- ---- Not Started/In Progress track the 7 checklist fields automatically;
--- Commissioned is a manual sign-off action ----
+-- ---- Not Started/In Progress/Commissioned are all fully auto-computed ----
 -- (End-to-End moved to install_checks -- verified during Function Test
 -- rather than tracked as its own commissioning field, so it's excluded
 -- from this count.)
--- Not_started/in_progress only -- never returns 'commissioned', which is a
--- manual-only state now (see set_point_status_and_date() below). Takes the
--- whole row so both that trigger and the cross-table one on
--- point_attribute_values can share this logic. An N/A field counts as
--- satisfied, matching pointProgress() in web/src/progress.ts.
-create or replace function checklist_bucket(p points)
+-- Reads the point's full completeness: the 7 fixed fields (each check/N/A),
+-- plus every custom attribute assigned to the point's project (see
+-- point_attribute_projects) -- Boolean the same check/N/A rule as the fixed
+-- fields, Text/Number requiring an actual non-N/A value (isAttrValueNA() in
+-- web/src/pointAttributes.ts has no separate "reviewed, doesn't apply" state
+-- distinct from "never touched", so there's no attribute-type-safe way to
+-- let N/A satisfy completeness there the way Boolean's na does -- an
+-- attribute that genuinely doesn't apply to some points needs a real,
+-- if trivial, value entered, or it should not have been assigned to those
+-- points' project in the first place). stable, not immutable, since it
+-- reads point_attribute_projects/point_attribute_values -- correct and safe
+-- to call from the triggers below, which always run inside the same
+-- transaction as whatever just changed.
+create or replace function full_bucket(p points)
 returns text
 language plpgsql
-immutable
+stable
 as $$
 declare
   v_checked int;
   v_na int;
+  v_project_id uuid;
 begin
   v_checked := (case when p.wired = 'check' then 1 else 0 end)
              + (case when p.tagged = 'check' then 1 else 0 end)
@@ -412,73 +422,52 @@ begin
         + (case when p.sequence = 'na' then 1 else 0 end)
         + (case when p.alarm = 'na' then 1 else 0 end)
         + (case when p.graphics = 'na' then 1 else 0 end);
-  return case when v_checked = 0 then 'not_started' else 'in_progress' end;
+
+  if v_checked < 7 - v_na then
+    return case when v_checked = 0 then 'not_started' else 'in_progress' end;
+  end if;
+
+  select e.project_id into v_project_id from equipment e where e.id = p.equipment_id;
+
+  if exists (
+    select 1
+    from point_attribute_projects pap
+    join point_attributes pa on pa.id = pap.point_attribute_id
+    left join point_attribute_values pav
+      on pav.point_id = p.id and pav.point_attribute_id = pap.point_attribute_id
+    where pap.project_id = v_project_id
+      and (
+        (pa.attr_type = 'boolean' and coalesce(pav.value, '') not in ('check', 'na'))
+        or (pa.attr_type <> 'boolean' and (
+          pav.value is null or btrim(pav.value) = '' or upper(btrim(pav.value)) = 'N/A'
+        ))
+      )
+  ) then
+    return 'in_progress';
+  end if;
+
+  return 'commissioned';
 end;
 $$;
 
--- Commissioned used to be purely auto-computed (all 7 fields check/N/A). Now
--- it's a deliberate action -- checking every box only gets a point to
--- in_progress; a human explicitly sets status='commissioned' (see
--- web/src/App.tsx's setPointStatus, a plain points update, no RPC) once
--- they're satisfied, informed by the % Completed pill (which does include
--- custom attributes -- see pointProgress() in web/src/progress.ts). There's
--- deliberately no completeness gate here matching that pill: the tech's
--- judgment call, not a rigid rule. Once commissioned, editing any of the 7
--- fields (detected below) or an explicit non-commissioned status write (a
--- manual "Revert" action) falls back to the auto-computed bucket and clears
--- date_commissioned; editing anything else (Notes/Blocked By) leaves it
--- untouched. A routine field edit never includes `status` in its SET list,
--- so Postgres carries the old value into NEW automatically -- "did the
--- client explicitly touch status" is simply new.status is distinct from
--- old.status, no extra signaling needed. Existing Commissioned rows are
--- grandfathered in without a migration: this logic leaves an
--- already-commissioned row untouched on any write that doesn't change a
--- tracked field, so nothing needs to re-run against existing data.
+-- Fully derived from current data -- the client never writes status/
+-- date_commissioned directly (no "Mark Commissioned"/"Revert" action
+-- exists). date_commissioned stamps the first time a point computes as
+-- commissioned and clears the moment it no longer does, so re-entering
+-- Commissioned after a later edit gets a fresh date, not the original one.
 create or replace function set_point_status_and_date()
 returns trigger
 language plpgsql
 as $$
-declare
-  v_fields_changed boolean;
 begin
-  if TG_OP = 'INSERT' then
-    new.status := checklist_bucket(new);
-    new.date_commissioned := null;
-    return new;
-  end if;
-
-  v_fields_changed :=
-    new.wired is distinct from old.wired
-    or new.tagged is distinct from old.tagged
-    or new.calibrate is distinct from old.calibrate
-    or new.function_test is distinct from old.function_test
-    or new.sequence is distinct from old.sequence
-    or new.alarm is distinct from old.alarm
-    or new.graphics is distinct from old.graphics;
-
-  if new.status = 'commissioned' and old.status is distinct from 'commissioned' and not v_fields_changed then
-    -- Explicit "Mark Commissioned" action from the client.
+  new.status := full_bucket(new);
+  if new.status = 'commissioned' then
     if new.date_commissioned is null then
       new.date_commissioned := current_date;
     end if;
-  elsif old.status = 'commissioned' and (v_fields_changed or new.status is distinct from 'commissioned') then
-    -- Was commissioned; either a checklist field just changed, or the client
-    -- explicitly moved it off commissioned (a manual "Revert" action) --
-    -- either way fall back to the auto-computed bucket.
-    new.status := checklist_bucket(new);
-    new.date_commissioned := null;
-  elsif old.status = 'commissioned' and new.status = 'commissioned' then
-    -- Already commissioned, nothing tracked changed (e.g. a Notes/Blocked By
-    -- edit) -- leave status/date exactly as they are.
-    null;
   else
-    -- Normal path: never manually promoted. Tracks not_started/in_progress
-    -- only -- even 7-for-7 stays 'in_progress' until a human explicitly
-    -- marks it Commissioned.
-    new.status := checklist_bucket(new);
     new.date_commissioned := null;
   end if;
-
   return new;
 end;
 $$;
@@ -488,10 +477,13 @@ create trigger trg_points_status_and_date before insert or update on points
   for each row execute function set_point_status_and_date();
 
 -- One-time (idempotent-safe) recompute: existing rows' status/date_commissioned
--- were computed against the old 8-field formula and won't update on their own
--- until next written. A plain UPDATE re-fires the BEFORE UPDATE trigger above
--- for every row even though no column value actually changes, so this is safe
--- to run (and re-run) without touching any other column.
+-- were computed under the old manual-Commissioned model and won't update on
+-- their own until next written. A plain UPDATE re-fires the BEFORE UPDATE
+-- trigger above for every row even though no column value actually changes,
+-- so this is safe to run (and re-run) without touching any other column --
+-- including the first time this version of the schema runs against
+-- already-commissioned rows that may no longer qualify under full_bucket()
+-- (e.g. an attribute assigned since they were marked Commissioned).
 update points set updated_at = updated_at;
 
 -- ---- RPCs for the two operations that need to be all-or-nothing ----
@@ -809,16 +801,37 @@ $$;
 
 -- Replaces the full set of projects an attribute is assigned to, atomically
 -- -- avoids the brief inconsistent-state window two separate plain
--- delete+insert calls from the client would have.
+-- delete+insert calls from the client would have. Also recomputes every
+-- point in every project this call touches, old assignment or new: since
+-- Commissioned now factors in attribute completeness (see full_bucket()
+-- above), assigning this attribute to a project can retroactively drop
+-- already-commissioned points there back to In Progress (nothing has a
+-- value for the new attribute yet), and un-assigning it can just as
+-- immediately restore Commissioned on points that were only held back by
+-- this one attribute -- neither should wait for the next unrelated edit on
+-- each point to take effect.
 create or replace function set_point_attribute_projects(p_attribute_id uuid, p_project_ids uuid[])
 returns void
 language plpgsql
 as $$
+declare
+  v_affected_project_ids uuid[];
 begin
+  select array_agg(distinct project_id) into v_affected_project_ids
+  from (
+    select project_id from point_attribute_projects where point_attribute_id = p_attribute_id
+    union
+    select unnest(p_project_ids)
+  ) affected;
+
   delete from point_attribute_projects where point_attribute_id = p_attribute_id;
   insert into point_attribute_projects (point_attribute_id, project_id)
   select p_attribute_id, unnest(p_project_ids)
   on conflict do nothing;
+
+  update points p set updated_at = now()
+  from equipment e
+  where e.id = p.equipment_id and e.project_id = any(v_affected_project_ids);
 end;
 $$;
 

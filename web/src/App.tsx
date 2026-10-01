@@ -27,7 +27,6 @@ import {
   PointAttributeOption,
   PointAttributeProject,
   PointAttributeValue,
-  PointStatus,
   Project,
 } from "./types";
 
@@ -199,21 +198,6 @@ export default function App() {
   const updatePoint = (point: Point, patch: Partial<Point>) => {
     setPoints((list) => list.map((p) => (p.id === point.id ? { ...p, ...patch } : p)));
     api.update<Point>("points", point.id, patch).catch(() => refreshAll());
-  };
-
-  // "Mark Commissioned"/"Revert to In Progress" -- a deliberate sign-off
-  // action, not the rapid-fire checklist cycling setPointValue above
-  // handles, so this isn't optimistic: the server's trigger logic
-  // (set_point_status_and_date() in supabase/schema.sql) decides the real
-  // resulting status and date_commissioned, and applying its actual
-  // response is simpler and more correct than guessing it client-side.
-  const setPointStatus = async (pointId: string, status: PointStatus) => {
-    try {
-      const updated = await api.update<Point>("points", pointId, { status });
-      setPoints((list) => list.map((p) => (p.id === pointId ? updated : p)));
-    } catch (err: any) {
-      setError(err.message ?? "Failed to update status");
-    }
   };
 
   const setInstallValue = (pointId: string, field: InstallField, value: CheckState) => {
@@ -568,7 +552,6 @@ export default function App() {
             onDeletePoint={deletePoint}
             onOpenIssues={(point) => setIssuesModalPointId(point.id)}
             onSetAttributeValue={setAttributeValue}
-            onSetStatus={setPointStatus}
           />
         ) : (
           <PointsView
@@ -590,7 +573,6 @@ export default function App() {
             onOpenIssues={(point) => setIssuesModalPointId(point.id)}
             onSetAttributeValue={setAttributeValue}
             onBulkSetAttributeValues={bulkSetAttributeValues}
-            onSetStatus={setPointStatus}
           />
         )}
       </div>

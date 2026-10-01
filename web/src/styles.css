@@ -654,18 +654,9 @@ textarea {
   white-space: nowrap;
 }
 
-/* Commissioning Status cell now holds the pill plus a sign-off action --
-   side by side, not stacked, since both are compact. */
 .status-cell {
   display: flex;
   align-items: center;
-  gap: 6px;
-}
-
-.mark-commissioned-btn {
-  font-size: 11px;
-  padding: 2px 8px;
-  white-space: nowrap;
 }
 
 /* A text/number attribute value whose raw content differs from its trimmed

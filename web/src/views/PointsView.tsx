@@ -79,7 +79,6 @@ export function PointsView({
   onOpenIssues,
   onSetAttributeValue,
   onBulkSetAttributeValues,
-  onSetStatus,
 }: {
   projectId: string;
   points: Point[];
@@ -99,7 +98,6 @@ export function PointsView({
   onOpenIssues: (point: Point) => void;
   onSetAttributeValue: (pointId: string, attributeId: string, value: string) => void;
   onBulkSetAttributeValues: (updates: { point_id: string; point_attribute_id: string; value: string }[]) => void;
-  onSetStatus: (pointId: string, status: PointStatus) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const clipboardRef = useRef<CheckState[][] | null>(null);
@@ -794,17 +792,6 @@ export function PointsView({
                                 <span className={`status-pill status-${point.status}`}>
                                   {POINT_STATUS_LABELS[point.status]}
                                 </span>
-                                <button
-                                  type="button"
-                                  className="btn-secondary mark-commissioned-btn"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onSetStatus(point.id, point.status === "commissioned" ? "in_progress" : "commissioned");
-                                  }}
-                                  onKeyDown={(e) => e.stopPropagation()}
-                                >
-                                  {point.status === "commissioned" ? "Revert" : "Mark Commissioned"}
-                                </button>
                               </td>
                               <td className="divider-left" style={{ width: dateCommissionedColWidth }}>
                                 {formatDateCommissioned(point.date_commissioned)}

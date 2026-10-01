@@ -56,7 +56,6 @@ export function PointsCardList({
   onDeletePoint,
   onOpenIssues,
   onSetAttributeValue,
-  onSetStatus,
 }: {
   projectId: string;
   points: Point[];
@@ -73,7 +72,6 @@ export function PointsCardList({
   onDeletePoint: (point: Point) => void;
   onOpenIssues: (point: Point) => void;
   onSetAttributeValue: (pointId: string, attributeId: string, value: string) => void;
-  onSetStatus: (pointId: string, status: PointStatus) => void;
 }) {
   const [showRemoved, setShowRemoved] = useState(false);
   const [panelFilter, setPanelFilter] = useState("");
@@ -374,15 +372,6 @@ export function PointsCardList({
                                   </button>
                                 );
                               })}
-                              <button
-                                type="button"
-                                className="btn-secondary mark-commissioned-btn"
-                                onClick={() =>
-                                  onSetStatus(point.id, point.status === "commissioned" ? "in_progress" : "commissioned")
-                                }
-                              >
-                                {point.status === "commissioned" ? "Revert to In Progress" : "Mark Commissioned"}
-                              </button>
                             </div>
                           )}
 
