@@ -36,6 +36,7 @@ import { attributesForProject, buildAttributeValueMap, getAttributeValue, option
 const BODY_FONT = '13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
 const HEADER_FONT = '600 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
 const NOTES_FONT = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
+const STATUS_PILL_FONT = '600 11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
 
 function normalizeToken(raw: string): CheckState | null {
   const t = raw.trim().toLowerCase();
@@ -214,6 +215,18 @@ export function PointsView({
         HEADER_FONT
       ),
     [rows]
+  );
+
+  // Fixed label set (POINT_STATUS_LABELS), not row-dependent data -- measures
+  // all three labels regardless of which ones are currently in use, so the
+  // column doesn't reflow the first time a point reaches a label it hadn't
+  // shown yet. headerLabel "" excludes "Status" itself (shorter than
+  // "Commissioned" anyway); paddingPx covers both the cell's own padding and
+  // .status-pill's own horizontal padding stacked inside it, which plain
+  // text/number columns don't have to account for.
+  const statusColWidth = useMemo(
+    () => autoFitColumnWidth(Object.values(POINT_STATUS_LABELS), "", STATUS_PILL_FONT, HEADER_FONT, 24 + 16),
+    []
   );
 
   // Each text/number attribute gets its own auto-fit width (same technique
@@ -614,7 +627,9 @@ export function PointsView({
                 )}
                 {showCommissioning && (
                   <>
-                    <th className="divider-left">Status</th>
+                    <th className="divider-left" style={{ width: statusColWidth }}>
+                      Status
+                    </th>
                     <th
                       className="divider-left checklist-item-header-attr"
                       style={{ width: dateCommissionedColWidth }}
@@ -788,7 +803,7 @@ export function PointsView({
                           )}
                           {showCommissioning && (
                             <>
-                              <td className="divider-left status-cell">
+                              <td className="divider-left status-cell" style={{ width: statusColWidth }}>
                                 <span className={`status-pill status-${point.status}`}>
                                   {POINT_STATUS_LABELS[point.status]}
                                 </span>

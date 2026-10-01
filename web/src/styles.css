@@ -657,6 +657,7 @@ textarea {
 .status-cell {
   display: flex;
   align-items: center;
+  justify-content: center;
 }
 
 /* A text/number attribute value whose raw content differs from its trimmed
