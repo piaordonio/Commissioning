@@ -172,14 +172,21 @@ calling out:
 - **Factored into % Completed, but never gates Commissioned itself.** Custom attribute
   values count toward `pointProgress()` in `web/src/progress.ts` (Commissioning % only,
   not Install — see "Two checklists, one grid" above) — Boolean attributes the same way
-  the 7 fixed fields already are, Text/Number as filled (trimmed non-empty) or not.
-  Reaching Commissioned itself is a manual action with no completeness gate (see "Two
-  checklists, one grid" above for why), but an attribute edit on an already-commissioned
-  point does revert it, same as editing one of the 7 fixed fields does — a small
-  cross-table trigger on `point_attribute_values` forces that re-evaluation, since an
-  attribute edit doesn't otherwise touch the `points` row at all. A text/number
-  attribute cell gets a light grey background when its value has a stray leading/
-  trailing space — that also doesn't count as "filled" for % Completed, so a value that
+  the 7 fixed fields already are. Text/Number attributes have no explicit N/A state the
+  way Boolean's check/x/N/A cycle does, so an unset, whitespace-only, or literally "N/A"
+  value (case-insensitive — `isAttrValueNA()` in `web/src/pointAttributes.ts`) is treated
+  as not-yet-applicable: excluded from the % Completed denominator entirely (same
+  treatment N/A already gets on the 7 fixed fields), and displayed as the literal text
+  "N/A" rather than blank — so assigning a new attribute to a project doesn't
+  retroactively ding every existing point's percentage until someone deliberately enters
+  a real value. Once a real value is entered it's always full credit — there's no
+  partial-credit concept for free text or a number. Reaching Commissioned itself is a
+  manual action with no completeness gate (see "Two checklists, one grid" above for
+  why), but an attribute edit on an already-commissioned point does revert it, same as
+  editing one of the 7 fixed fields does — a small cross-table trigger on
+  `point_attribute_values` forces that re-evaluation, since an attribute edit doesn't
+  otherwise touch the `points` row at all. A text/number attribute cell gets a light
+  grey background when its value has a stray leading/trailing space — a value that
   looks entered but is actually just whitespace doesn't silently pass as done.
 - **Attribute columns sit right after Graphics, before Commissioning's own Status/Date
   Commissioned** — not after them. The group-header bar splits into two

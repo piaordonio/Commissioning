@@ -30,7 +30,7 @@ import { formatDateCommissioned } from "../formatDate";
 import { SYMBOL, nextCheckState } from "../checklistCycle";
 import { usePointRows } from "../usePointRows";
 import { buildOpenIssueCountByEquipment, groupIssuesByPointId, openIssueCount } from "../issues";
-import { attributesForProject, buildAttributeValueMap, getAttributeValue, optionsForAttribute } from "../pointAttributes";
+import { attributesForProject, buildAttributeValueMap, getAttributeValue, optionsForAttribute, isAttrValueNA, ATTR_NA_DISPLAY } from "../pointAttributes";
 
 // The phone-width counterpart to PointsView.tsx -- same data and handler
 // shapes, entirely different markup. PointsView.tsx's grid is real <table>
@@ -420,7 +420,7 @@ export function PointsCardList({
                                         value={value}
                                         onChange={(e) => onSetAttributeValue(point.id, attr.id, e.target.value)}
                                       >
-                                        <option value="">—</option>
+                                        <option value="">{ATTR_NA_DISPLAY}</option>
                                         {!options.some((o) => o.value === value) && value && (
                                           <option value={value}>{value}</option>
                                         )}
@@ -433,11 +433,12 @@ export function PointsCardList({
                                     ) : (
                                       <input
                                         className="mobile-input"
-                                        type={attr.attr_type === "number" ? "number" : "text"}
-                                        defaultValue={value}
-                                        placeholder="—"
+                                        type="text"
+                                        inputMode={attr.attr_type === "number" ? "decimal" : "text"}
+                                        defaultValue={isAttrValueNA(value) ? ATTR_NA_DISPLAY : value}
                                         onBlur={(e) => {
-                                          if (e.target.value !== value) onSetAttributeValue(point.id, attr.id, e.target.value);
+                                          const normalized = isAttrValueNA(e.target.value) ? "" : e.target.value;
+                                          if (normalized !== value) onSetAttributeValue(point.id, attr.id, normalized);
                                         }}
                                       />
                                     )}

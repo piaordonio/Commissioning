@@ -42,3 +42,17 @@ export function getAttributeValue(
 export function projectCountForAttribute(links: PointAttributeProject[], attributeId: string): number {
   return links.filter((l) => l.point_attribute_id === attributeId).length;
 }
+
+// Text/Number attributes have no explicit N/A state the way Boolean's
+// CheckState cycle does -- an unset, whitespace-only, or literally "N/A"
+// value is treated as not-yet-applicable: excluded from % Completed (see
+// pointProgress() in progress.ts) and shown as N/A rather than blank, so
+// adding a new attribute to a project doesn't retroactively ding every
+// existing point's percentage until someone deliberately enters a real
+// value for it.
+export const ATTR_NA_DISPLAY = "N/A";
+
+export function isAttrValueNA(raw: string): boolean {
+  const trimmed = raw.trim();
+  return trimmed === "" || trimmed.toUpperCase() === ATTR_NA_DISPLAY;
+}

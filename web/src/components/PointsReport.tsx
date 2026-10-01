@@ -16,7 +16,7 @@ import {
 } from "../types";
 import { buildProgressByEquipment, averageProgress } from "../progress";
 import { buildIssueRows, groupIssuesByPointId, openIssueCount } from "../issues";
-import { attributesForProject, buildAttributeValueMap, getAttributeValue } from "../pointAttributes";
+import { attributesForProject, buildAttributeValueMap, getAttributeValue, isAttrValueNA, ATTR_NA_DISPLAY } from "../pointAttributes";
 import { resolvedPointNumber, displayPanel } from "../pointNumber";
 import { formatDateCommissioned, formatTimestamp } from "../formatDate";
 
@@ -397,7 +397,7 @@ export function PointsReport({
                               </td>
                             ) : (
                               <td key={a.id} className="report-col-attr-text truncate" title={value}>
-                                {value || "—"}
+                                {isAttrValueNA(value) ? ATTR_NA_DISPLAY : value}
                               </td>
                             );
                           })}

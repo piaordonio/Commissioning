@@ -1,4 +1,5 @@
 import { CHECK_FIELDS, CheckState, Point, PointAttribute } from "./types";
+import { isAttrValueNA } from "./pointAttributes";
 
 /** Credit each state earns toward "done"; null excludes the field from the average (N/A). */
 const CREDIT: Record<CheckState, number | null> = {
@@ -12,12 +13,14 @@ const CREDIT: Record<CheckState, number | null> = {
 // attributes assigned to its project, equally weighted -- Commissioning
 // only, not Install (the Attributes column group sits next to Commissioning
 // in the grid, not Install). Boolean attributes reuse CREDIT exactly like
-// the 7 fixed fields; Text/Number have no N/A concept, so they're always
-// applicable -- credit 1 if the trimmed value is non-empty, else 0 (a
-// stray-whitespace-only value counts as empty, matching the grey
-// stray-whitespace warning in PointsView.tsx/PointsCardList.tsx). This no
-// longer gates points.status -- see set_point_status_and_date() in
-// supabase/schema.sql for why "Commissioned" is a manual action instead.
+// the 7 fixed fields. Text/Number attributes are excluded from the
+// denominator entirely while unset (isAttrValueNA -- empty, whitespace-only,
+// or literally "N/A", the default display for a never-touched cell), same
+// treatment N/A already gets everywhere else in this app; once a real value
+// is entered they're always full credit, since there's no partial-credit
+// concept for free text or a number. This no longer gates points.status --
+// see set_point_status_and_date() in supabase/schema.sql for why
+// "Commissioned" is a manual action instead.
 export function pointProgress(
   point: Point,
   attrs: PointAttribute[],
@@ -39,8 +42,9 @@ export function pointProgress(
       applicable++;
       creditSum += credit;
     } else {
+      if (isAttrValueNA(raw)) continue;
       applicable++;
-      creditSum += raw.trim() !== "" ? 1 : 0;
+      creditSum += 1;
     }
   }
   return applicable === 0 ? 1 : creditSum / applicable;

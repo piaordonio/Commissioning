@@ -31,7 +31,7 @@ import { formatDateCommissioned } from "../formatDate";
 import { SYMBOL, nextCheckState } from "../checklistCycle";
 import { usePointRows } from "../usePointRows";
 import { buildOpenIssueCountByEquipment, groupIssuesByPointId, openIssueCount } from "../issues";
-import { attributesForProject, buildAttributeValueMap, getAttributeValue, optionsForAttribute } from "../pointAttributes";
+import { attributesForProject, buildAttributeValueMap, getAttributeValue, optionsForAttribute, isAttrValueNA, ATTR_NA_DISPLAY } from "../pointAttributes";
 
 const BODY_FONT = '13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
 const HEADER_FONT = '600 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
@@ -212,7 +212,7 @@ export function PointsView({
     for (const attr of textNumberAttributes) {
       const options = optionsForAttribute(pointAttributeOptions, attr.id);
       const candidates = [
-        ...rows.map((p) => getAttributeValue(attrValueMap, p.id, attr.id) || "—"),
+        ...rows.map((p) => getAttributeValue(attrValueMap, p.id, attr.id) || ATTR_NA_DISPLAY),
         ...options.map((o) => o.value),
       ];
       map.set(attr.id, autoFitColumnWidth(candidates, attr.short_text || attr.name, NOTES_FONT, HEADER_FONT));
@@ -591,7 +591,9 @@ export function PointsView({
                     {textNumberAttributes.map((a, i) => (
                       <th
                         key={`attr-${a.id}`}
-                        className={i === 0 && booleanAttributes.length === 0 ? "divider-left" : ""}
+                        className={`checklist-item-header-attr ${
+                          i === 0 && booleanAttributes.length === 0 ? "divider-left" : ""
+                        }`}
                         style={{ width: textNumberAttrColWidths.get(a.id) }}
                       >
                         {a.short_text || a.name}
@@ -740,7 +742,7 @@ export function PointsView({
                                         value={value}
                                         onChange={(e) => onSetAttributeValue(point.id, attr.id, e.target.value)}
                                       >
-                                        <option value="">—</option>
+                                        <option value="">{ATTR_NA_DISPLAY}</option>
                                         {!options.some((o) => o.value === value) && value && (
                                           <option value={value}>{value}</option>
                                         )}
@@ -754,11 +756,12 @@ export function PointsView({
                                       <input
                                         key={`${point.id}-attr-${attr.id}`}
                                         className="checklist-inline-input"
-                                        type={attr.attr_type === "number" ? "number" : "text"}
-                                        defaultValue={value}
-                                        placeholder="—"
+                                        type="text"
+                                        inputMode={attr.attr_type === "number" ? "decimal" : "text"}
+                                        defaultValue={isAttrValueNA(value) ? ATTR_NA_DISPLAY : value}
                                         onBlur={(e) => {
-                                          if (e.target.value !== value) onSetAttributeValue(point.id, attr.id, e.target.value);
+                                          const normalized = isAttrValueNA(e.target.value) ? "" : e.target.value;
+                                          if (normalized !== value) onSetAttributeValue(point.id, attr.id, normalized);
                                         }}
                                       />
                                     )}

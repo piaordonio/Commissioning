@@ -210,9 +210,11 @@ export interface PointAttributeOption {
 // value. value is always text regardless of attr_type -- boolean reuses
 // the exact CheckState convention ('', 'check', 'x', 'na'); number is a
 // raw numeric string -- enforced by check_point_attribute_value() in
-// supabase/schema.sql. Informational only, same as Issue.status: never
-// read by the points-status trigger, never factored into progress.ts /
-// installProgress.ts.
+// supabase/schema.sql. Factored into pointProgress() in progress.ts (never
+// installProgress.ts -- Attributes sits next to Commissioning, not Install),
+// and an edit here reverts an already-Commissioned point back to
+// in_progress via revert_commissioned_on_attribute_change() in
+// supabase/schema.sql, same as editing one of the 7 fixed fields does.
 export interface PointAttributeValue {
   point_id: string;
   point_attribute_id: string;

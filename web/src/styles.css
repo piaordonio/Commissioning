@@ -336,6 +336,8 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  max-height: 320px;
+  overflow-y: auto;
 }
 
 .attribute-option-row,
@@ -396,6 +398,22 @@ textarea {
   border-left: 1px solid var(--border);
 }
 
+/* Same wrap/font treatment as .checklist-item-header above (the fixed
+   Install/Commissioning field headers, which Boolean attribute headers also
+   reuse directly) -- but without its fixed 60px width/min-width/max-width,
+   since Text/Number attribute headers get their own per-attribute auto-fit
+   width from PointsView.tsx instead (see textNumberAttrColWidths). */
+.data-table th.checklist-item-header-attr {
+  text-align: center;
+  vertical-align: middle;
+  padding: 4px 2px;
+  white-space: normal;
+  overflow-wrap: break-word;
+  line-height: 1.15;
+  font-size: 11px;
+  border-left: 1px solid var(--border);
+}
+
 .checklist-name-col {
   max-width: 160px;
 }
@@ -424,7 +442,8 @@ textarea {
    actually read as a group boundary rather than blending into the routine
    column lines either side of it. */
 .checklist-cell.divider-left,
-.checklist-item-header.divider-left {
+.checklist-item-header.divider-left,
+.checklist-item-header-attr.divider-left {
   border-left: 2px solid var(--text-muted);
 }
 
