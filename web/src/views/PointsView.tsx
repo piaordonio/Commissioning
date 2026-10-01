@@ -841,7 +841,7 @@ export function PointsView({
                               return (
                                 <button
                                   type="button"
-                                  className={`icon-btn issue-flag ${openCount > 0 ? "issue-flag-active" : ""}`}
+                                  className={openCount > 0 ? "icon-btn issue-count-pill" : "icon-btn issue-flag"}
                                   title={
                                     openCount > 0
                                       ? `${openCount} open issue${openCount === 1 ? "" : "s"}`
@@ -856,7 +856,8 @@ export function PointsView({
                                 >
                                   {openCount > 0 ? (
                                     <>
-                                      <span className="issue-icon">!</span> {openCount}
+                                      <span className="issue-icon">!</span> {openCount} open issue
+                                      {openCount === 1 ? "" : "s"}
                                     </>
                                   ) : (
                                     "⚑"

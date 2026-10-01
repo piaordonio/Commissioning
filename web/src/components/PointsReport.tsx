@@ -417,11 +417,17 @@ export function PointsReport({
                           )}
                           <td className="report-col-notes divider-left">{point.notes || "—"}</td>
                           <td className="report-col-blocked">
-                            {openIssueCount(issuesByPointId.get(point.id)) > 0 && (
-                              <span className="issue-icon" title="Open issue">
-                                !
-                              </span>
-                            )}{" "}
+                            {(() => {
+                              const openCount = openIssueCount(issuesByPointId.get(point.id));
+                              return (
+                                openCount > 0 && (
+                                  <span className="issue-count-pill">
+                                    <span className="issue-icon">!</span> {openCount} open issue
+                                    {openCount === 1 ? "" : "s"}
+                                  </span>
+                                )
+                              );
+                            })()}{" "}
                             {point.blocked_by || "—"}
                           </td>
                         </tr>
