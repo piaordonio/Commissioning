@@ -181,6 +181,14 @@ calling out:
   attribute cell gets a light grey background when its value has a stray leading/
   trailing space — that also doesn't count as "filled" for % Completed, so a value that
   looks entered but is actually just whitespace doesn't silently pass as done.
+- **Attribute columns sit right after Graphics, before Commissioning's own Status/Date
+  Commissioned** — not after them. The group-header bar splits into two
+  "Commissioning"-colored segments with the "Attributes" bar sandwiched in between
+  (only when attributes are actually assigned and shown; otherwise it's the same single
+  unbroken bar as always). Each Text/Number column gets its own auto-fit width (same
+  canvas-measurement technique `autoFitColumnWidth()` already uses for Notes), not a
+  shared fixed floor — most attribute values are short (a reading, a single word), so a
+  one-size column would waste far more space than Notes' free-text does.
 - **The printed report shows every attribute column assigned to the project,
   unconditionally** — not only the ones with data among the currently visible points.
   A column that silently disappeared between prints depending on which points happen

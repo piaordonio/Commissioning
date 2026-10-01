@@ -484,6 +484,14 @@ textarea {
   min-width: 0;
 }
 
+/* Same reasoning as .checklist-notes-col above, for Text/Number custom
+   attribute columns -- each gets its own auto-fit width (see
+   textNumberAttrColWidths in PointsView.tsx), usually much narrower than
+   160px for a short value like a reading or a single word. */
+.checklist-text-col.checklist-attr-col {
+  min-width: 0;
+}
+
 .checklist-inline-input {
   width: 100%;
   min-width: 0;

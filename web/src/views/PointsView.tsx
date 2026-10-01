@@ -201,6 +201,25 @@ export function PointsView({
     [rows]
   );
 
+  // Each text/number attribute gets its own auto-fit width (same technique
+  // as Notes above), not the generic .checklist-text-col floor -- these
+  // tend to hold short values (a reading, a single word), so a shared wide
+  // column would waste far more space than Notes' free-text does. Measures
+  // every currently-assigned dropdown option too, not just values already
+  // in use, so picking a longer option later doesn't clip/reflow the column.
+  const textNumberAttrColWidths = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const attr of textNumberAttributes) {
+      const options = optionsForAttribute(pointAttributeOptions, attr.id);
+      const candidates = [
+        ...rows.map((p) => getAttributeValue(attrValueMap, p.id, attr.id) || "—"),
+        ...options.map((o) => o.value),
+      ];
+      map.set(attr.id, autoFitColumnWidth(candidates, attr.short_text || attr.name, NOTES_FONT, HEADER_FONT));
+    }
+    return map;
+  }, [textNumberAttributes, rows, attrValueMap, pointAttributeOptions]);
+
   const getValue = (cell: Cell): CheckState => {
     if (cell.group === "commissioning") return rows[cell.r][CHECK_FIELDS[cell.c]];
     if (cell.group === "attributes")
@@ -509,12 +528,25 @@ export function PointsView({
                     Install
                   </th>
                 )}
-                {showCommissioning && (
-                  <th colSpan={CHECK_FIELDS.length + 2} className="column-group-header column-group-commissioning">
-                    Commissioning
-                  </th>
-                )}
-                {showAttributes && projectAttrs.length > 0 && (
+                {showCommissioning &&
+                  (showAttributes && projectAttrs.length > 0 ? (
+                    <>
+                      <th colSpan={CHECK_FIELDS.length} className="column-group-header column-group-commissioning">
+                        Commissioning
+                      </th>
+                      <th colSpan={projectAttrs.length} className="column-group-header column-group-attributes">
+                        Attributes
+                      </th>
+                      <th colSpan={2} className="column-group-header column-group-commissioning">
+                        Commissioning
+                      </th>
+                    </>
+                  ) : (
+                    <th colSpan={CHECK_FIELDS.length + 2} className="column-group-header column-group-commissioning">
+                      Commissioning
+                    </th>
+                  ))}
+                {!showCommissioning && showAttributes && projectAttrs.length > 0 && (
                   <th colSpan={projectAttrs.length} className="column-group-header column-group-attributes">
                     Attributes
                   </th>
@@ -547,8 +579,6 @@ export function PointsView({
                         {CHECK_FIELD_LABELS[f]}
                       </th>
                     ))}
-                    <th className="divider-left">Status</th>
-                    <th className="divider-left">Date Commissioned</th>
                   </>
                 )}
                 {showAttributes && projectAttrs.length > 0 && (
@@ -562,10 +592,17 @@ export function PointsView({
                       <th
                         key={`attr-${a.id}`}
                         className={i === 0 && booleanAttributes.length === 0 ? "divider-left" : ""}
+                        style={{ width: textNumberAttrColWidths.get(a.id) }}
                       >
                         {a.short_text || a.name}
                       </th>
                     ))}
+                  </>
+                )}
+                {showCommissioning && (
+                  <>
+                    <th className="divider-left">Status</th>
+                    <th className="divider-left">Date Commissioned</th>
                   </>
                 )}
                 <th className="divider-left" style={{ width: notesColWidth }}>
@@ -668,23 +705,6 @@ export function PointsView({
                                   </td>
                                 );
                               })}
-                              <td className="divider-left status-cell">
-                                <span className={`status-pill status-${point.status}`}>
-                                  {POINT_STATUS_LABELS[point.status]}
-                                </span>
-                                <button
-                                  type="button"
-                                  className="btn-secondary mark-commissioned-btn"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onSetStatus(point.id, point.status === "commissioned" ? "in_progress" : "commissioned");
-                                  }}
-                                  onKeyDown={(e) => e.stopPropagation()}
-                                >
-                                  {point.status === "commissioned" ? "Revert" : "Mark Commissioned"}
-                                </button>
-                              </td>
-                              <td className="divider-left">{formatDateCommissioned(point.date_commissioned)}</td>
                             </>
                           )}
                           {showAttributes && projectAttrs.length > 0 && (
@@ -710,7 +730,7 @@ export function PointsView({
                                 return (
                                   <td
                                     key={`attr-${attr.id}`}
-                                    className={`checklist-text-col ${
+                                    className={`checklist-text-col checklist-attr-col ${
                                       i === 0 && booleanAttributes.length === 0 ? "divider-left" : ""
                                     } ${value !== value.trim() ? "attr-stray-whitespace" : ""}`}
                                   >
@@ -745,6 +765,27 @@ export function PointsView({
                                   </td>
                                 );
                               })}
+                            </>
+                          )}
+                          {showCommissioning && (
+                            <>
+                              <td className="divider-left status-cell">
+                                <span className={`status-pill status-${point.status}`}>
+                                  {POINT_STATUS_LABELS[point.status]}
+                                </span>
+                                <button
+                                  type="button"
+                                  className="btn-secondary mark-commissioned-btn"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onSetStatus(point.id, point.status === "commissioned" ? "in_progress" : "commissioned");
+                                  }}
+                                  onKeyDown={(e) => e.stopPropagation()}
+                                >
+                                  {point.status === "commissioned" ? "Revert" : "Mark Commissioned"}
+                                </button>
+                              </td>
+                              <td className="divider-left">{formatDateCommissioned(point.date_commissioned)}</td>
                             </>
                           )}
                           <td className="divider-left checklist-text-col checklist-notes-col">
