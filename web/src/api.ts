@@ -11,6 +11,40 @@ function assertNoError<T>(data: T | null, error: { message: string } | null): T 
   return data as T;
 }
 
+function chunk<T>(items: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += size) chunks.push(items.slice(i, i + size));
+  return chunks;
+}
+
+// PostgREST embeds an .in() filter's values directly into the request URL
+// (e.g. "point_id=in.(id1,id2,...)") -- for a large project, enough ids
+// (a few hundred) makes that URL long enough to get rejected outright
+// (400 Bad Request) by some layer in front of Postgres (a gateway/proxy
+// header-size limit), well before it'd ever hit Postgres' own query
+// planner. Splitting the id list into fixed-size batches and running them
+// as parallel requests keeps every individual URL comfortably short
+// regardless of project size, at the cost of a few more round trips. Any
+// `.order()` passed via buildQuery only sorts within each batch, not the
+// merged whole -- harmless here since every caller (usePointRows.ts,
+// PointsReport.tsx) already re-sorts whatever it gets for display anyway.
+async function listByIdsInChunks<T>(
+  table: string,
+  column: string,
+  ids: string[],
+  buildQuery: (query: any) => any = (q) => q
+): Promise<T[]> {
+  if (ids.length === 0) return [];
+  const results = await Promise.all(
+    chunk(ids, 150).map(async (batch) => {
+      const query = buildQuery(supabase.from(table).select("*").in(column, batch));
+      const { data, error } = await query;
+      return assertNoError(data as T[] | null, error);
+    })
+  );
+  return results.flat();
+}
+
 export const api = {
   list: async <T>(table: ListTable, params?: Record<string, string>): Promise<T[]> => {
     let query = supabase.from(table).select("*");
@@ -44,48 +78,27 @@ export const api = {
       .eq("project_id", projectId);
     assertNoError(equipmentRows, equipmentError);
     const equipmentIds = (equipmentRows ?? []).map((e: { id: string }) => e.id);
-    if (equipmentIds.length === 0) return [];
-
-    const { data, error } = await supabase
-      .from("points")
-      .select("*")
-      .in("equipment_id", equipmentIds)
-      .order("point_number");
-    return assertNoError(data as T[] | null, error);
+    return listByIdsInChunks<T>("points", "equipment_id", equipmentIds, (q) => q.order("point_number"));
   },
 
   // install_checks likewise don't carry project_id -- fetched by the point
   // ids the caller already has from listPoints(), one row per point (see
   // create_install_check_for_point() in supabase/schema.sql).
-  listInstallChecks: async <T>(pointIds: string[]): Promise<T[]> => {
-    if (pointIds.length === 0) return [];
-    const { data, error } = await supabase.from("install_checks").select("*").in("point_id", pointIds);
-    return assertNoError(data as T[] | null, error);
-  },
+  listInstallChecks: async <T>(pointIds: string[]): Promise<T[]> => listByIdsInChunks<T>("install_checks", "point_id", pointIds),
 
   // issues, like install_checks, carry no project_id -- fetched by the
   // point ids the caller already has from listPoints(). Unlike
   // install_checks (exactly one row per point), a point can have zero or
   // many issue rows.
-  listIssues: async <T>(pointIds: string[]): Promise<T[]> => {
-    if (pointIds.length === 0) return [];
-    const { data, error } = await supabase
-      .from("issues")
-      .select("*")
-      .in("point_id", pointIds)
-      .order("created_at");
-    return assertNoError(data as T[] | null, error);
-  },
+  listIssues: async <T>(pointIds: string[]): Promise<T[]> =>
+    listByIdsInChunks<T>("issues", "point_id", pointIds, (q) => q.order("created_at")),
 
   // point_attribute_values, like install_checks/issues, carries no
   // project_id -- fetched by the point ids the caller already has from
   // listPoints(). Sparse like issues (zero or many rows per point), not
   // guaranteed-one-per-point like install_checks.
-  listPointAttributeValues: async <T>(pointIds: string[]): Promise<T[]> => {
-    if (pointIds.length === 0) return [];
-    const { data, error } = await supabase.from("point_attribute_values").select("*").in("point_id", pointIds);
-    return assertNoError(data as T[] | null, error);
-  },
+  listPointAttributeValues: async <T>(pointIds: string[]): Promise<T[]> =>
+    listByIdsInChunks<T>("point_attribute_values", "point_id", pointIds),
 
   // `as any`: this client isn't wired to Supabase's generated Database types
   // (no schema codegen step for a project this size), so .insert()/.update()
