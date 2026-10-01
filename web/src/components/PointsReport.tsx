@@ -396,7 +396,11 @@ export function PointsReport({
                                 {SYMBOL[value as CheckState]}
                               </td>
                             ) : (
-                              <td key={a.id} className="report-col-attr-text truncate" title={value}>
+                              <td
+                                key={a.id}
+                                className={`report-col-attr-text truncate ${isAttrValueNA(value) ? "attr-value-na" : ""}`}
+                                title={value}
+                              >
                                 {isAttrValueNA(value) ? ATTR_NA_DISPLAY : value}
                               </td>
                             );

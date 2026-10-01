@@ -756,7 +756,7 @@ export function PointsView({
                                   >
                                     {options.length > 0 ? (
                                       <select
-                                        className="checklist-inline-input"
+                                        className={`checklist-inline-input ${isAttrValueNA(value) ? "attr-value-na" : ""}`}
                                         value={value}
                                         onChange={(e) => onSetAttributeValue(point.id, attr.id, e.target.value)}
                                       >
@@ -773,7 +773,7 @@ export function PointsView({
                                     ) : (
                                       <input
                                         key={`${point.id}-attr-${attr.id}`}
-                                        className="checklist-inline-input"
+                                        className={`checklist-inline-input ${isAttrValueNA(value) ? "attr-value-na" : ""}`}
                                         type="text"
                                         inputMode={attr.attr_type === "number" ? "decimal" : "text"}
                                         defaultValue={isAttrValueNA(value) ? ATTR_NA_DISPLAY : value}

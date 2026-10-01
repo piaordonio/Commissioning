@@ -416,7 +416,7 @@ export function PointsCardList({
                                     {attr.short_text || attr.name}
                                     {options.length > 0 ? (
                                       <select
-                                        className="mobile-input"
+                                        className={`mobile-input ${isAttrValueNA(value) ? "attr-value-na" : ""}`}
                                         value={value}
                                         onChange={(e) => onSetAttributeValue(point.id, attr.id, e.target.value)}
                                       >
@@ -432,7 +432,7 @@ export function PointsCardList({
                                       </select>
                                     ) : (
                                       <input
-                                        className="mobile-input"
+                                        className={`mobile-input ${isAttrValueNA(value) ? "attr-value-na" : ""}`}
                                         type="text"
                                         inputMode={attr.attr_type === "number" ? "decimal" : "text"}
                                         defaultValue={isAttrValueNA(value) ? ATTR_NA_DISPLAY : value}

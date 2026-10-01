@@ -511,6 +511,27 @@ textarea {
   min-width: 0;
 }
 
+/* Text/Number attribute values (and their N/A placeholder) match the 11px
+   size Boolean attributes already show for their own N/A state (.checklist-na
+   above) -- .checklist-inline-input's own 12px default stays as-is for
+   Notes/Blocked By, which aren't part of this comparison. */
+.checklist-attr-col .checklist-inline-input {
+  font-size: 11px;
+}
+
+/* The literal "N/A" text/number attributes show while unset, greyed out the
+   same way Boolean's own N/A state is (.checklist-na above) -- applied via a
+   class rather than a CSS value-selector since these are plain inputs/selects,
+   not something :placeholder-shown or similar could target. Compounded with
+   each surface's own input class (grid/mobile both set their own `color`) so
+   this always wins on specificity -- a bare `.attr-value-na` would tie with
+   those and lose on source order instead. */
+.checklist-inline-input.attr-value-na,
+.mobile-input.attr-value-na,
+.report-col-attr-text.attr-value-na {
+  color: #94a3b8;
+}
+
 .checklist-inline-input {
   width: 100%;
   min-width: 0;
