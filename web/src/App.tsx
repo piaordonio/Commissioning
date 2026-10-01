@@ -514,6 +514,7 @@ export default function App() {
             project={currentProject}
             equipment={equipment}
             points={points}
+            installChecks={installChecks}
             issues={issues}
             pointAttributes={pointAttributes}
             pointAttributeProjects={pointAttributeProjects}

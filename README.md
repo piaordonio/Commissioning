@@ -581,21 +581,35 @@ height scroll panel, and without this override the flex column would
 shrink it and pop up a second, nested scrollbar next to the page's real
 one.
 
-A **Checklist / Issues** toggle in the toolbar switches the whole report
-between the per-field grid above and a second, differently-shaped report
-over the same project data: a punch list of every active point that has an
-issue logged against it (description, recommended action, status, and the
-date it was created), grouped by equipment the same way. It defaults to
-open issues only — the report you'd actually hand to a subcontractor —
-with an "Include closed issues" checkbox to pull resolved ones back in for
-a closeout record. This is a mode on the existing report rather than a
-second print flow, since both need the same project data and print CSS and
-neither needed its own screen. Each row has a screen-only "✎" button
-(`no-print`, so it never shows up on an actual printout) opening that
-point's issue log in the same modal the grid and Dashboard use — a punch
-list is often the moment you notice something needs a status update or a
-follow-up note, so fixing it shouldn't mean leaving the report to hunt the
-point down in the grid.
+An **Install / Commissioning / Issues** toggle in the toolbar switches the
+whole report between three differently-shaped views over the same project
+data, rather than three separate print flows — all three need the same
+project data and print CSS and none needs its own screen. Commissioning is
+the per-field grid described above (and the default mode); Install mirrors
+it exactly for the other checklist the live grid shows side by side (see
+"Two checklists, one grid"): the 7 Install fields, its own Not Started / In
+Progress / Complete status filter and pill (independent of Commissioning's
+own filter — unchecking Complete there doesn't touch what's checked here),
+and each equipment group's *weighted* Install % (`installProgress()` in
+`web/src/installProgress.ts`, not a plain fixed-fields count) rather than
+Commissioning's. Install has no Date column and no Commissioned By signoff
+— neither concept exists for Install (see `installStatus()`'s own comment
+for why: there's no "date install completed" requiring a trigger-owned
+column the way Commissioning's Date Commissioned does). Both reuse the same
+shared `points.notes`/`points.blocked_by` columns the live grid's two
+checklists already share, so there's nothing separate to wire up there.
+
+Issues is a third, differently-shaped report: a punch list of every active
+point that has an issue logged against it (description, recommended
+action, status, and the date it was created), grouped by equipment the
+same way. It defaults to open issues only — the report you'd actually hand
+to a subcontractor — with an "Include closed issues" checkbox to pull
+resolved ones back in for a closeout record. Each row has a screen-only
+"✎" button (`no-print`, so it never shows up on an actual printout) opening
+that point's issue log in the same modal the grid and Dashboard use — a
+punch list is often the moment you notice something needs a status update
+or a follow-up note, so fixing it shouldn't mean leaving the report to hunt
+the point down in the grid.
 
 ## Stack
 

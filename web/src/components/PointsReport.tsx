@@ -4,6 +4,9 @@ import {
   CHECK_FIELD_LABELS,
   CheckState,
   Equipment,
+  INSTALL_FIELDS,
+  INSTALL_FIELD_LABELS,
+  InstallCheck,
   ISSUE_STATUS_LABELS,
   Issue,
   Point,
@@ -15,6 +18,13 @@ import {
   Project,
 } from "../types";
 import { buildProgressByEquipment, averageProgress } from "../progress";
+import {
+  averageInstallProgress,
+  buildInstallProgressByEquipment,
+  installStatus,
+  InstallStatus,
+  INSTALL_STATUS_LABELS,
+} from "../installProgress";
 import { buildIssueRows, groupIssuesByPointId, openIssueCount } from "../issues";
 import { attributesForProject, buildAttributeValueMap, getAttributeValue, isAttrValueNA, ATTR_NA_DISPLAY } from "../pointAttributes";
 import { resolvedPointNumber, displayPanel } from "../pointNumber";
@@ -57,6 +67,7 @@ export function PointsReport({
   project,
   equipment,
   points,
+  installChecks,
   issues,
   pointAttributes,
   pointAttributeProjects,
@@ -67,6 +78,7 @@ export function PointsReport({
   project: Project;
   equipment: Equipment[];
   points: Point[];
+  installChecks: InstallCheck[];
   issues: Issue[];
   pointAttributes: PointAttribute[];
   pointAttributeProjects: PointAttributeProject[];
@@ -74,12 +86,14 @@ export function PointsReport({
   onOpenIssues: (point: Point) => void;
   onBack: () => void;
 }) {
-  // "Checklist" is the handoff document this view has always been; "Issues"
-  // is a second, differently-shaped report over the same project data (a
-  // punch list, not a per-field grid) -- a mode toggle here instead of a
-  // second print flow/header button, since both need the same project data
-  // and print CSS and neither needs its own screen.
-  const [reportMode, setReportMode] = useState<"checklist" | "issues">("checklist");
+  // "Commissioning" and "Install" are the two handoff checklists the live
+  // grid already shows side by side (see "Two checklists, one grid" in
+  // README.md); "Issues" is a third, differently-shaped report over the
+  // same project data (a punch list, not a per-field grid) -- one mode
+  // toggle here instead of three separate print flows/header buttons,
+  // since all three need the same project data and print CSS and none
+  // needs its own screen.
+  const [reportMode, setReportMode] = useState<"commissioning" | "install" | "issues">("commissioning");
   const [commissionedBy, setCommissionedBy] = useState("");
   const [commissionedByNames, setCommissionedByNames] = useState<string[]>(() => loadCommissionedByNames());
   const [hideDateCommissioned, setHideDateCommissioned] = useState(false);
@@ -97,10 +111,49 @@ export function PointsReport({
     in_progress: true,
     commissioned: true,
   });
+  // Mirrors statusFilter above, but keyed by InstallStatus for the Install
+  // mode's own status filter -- a manager wanting "what's remaining" on
+  // Install unchecks Complete independently of whatever the Commissioning
+  // filter is set to.
+  const [installStatusFilter, setInstallStatusFilter] = useState<Record<InstallStatus, boolean>>({
+    not_started: true,
+    in_progress: true,
+    complete: true,
+  });
   const activePoints = useMemo(() => points.filter((p) => p.active), [points]);
   const visiblePoints = useMemo(() => activePoints.filter((p) => statusFilter[p.status]), [activePoints, statusFilter]);
   const statusFilterActive = !statusFilter.not_started || !statusFilter.in_progress || !statusFilter.commissioned;
   const equipmentById = useMemo(() => Object.fromEntries(equipment.map((e) => [e.id, e])), [equipment]);
+
+  const installChecksByPointId = useMemo(
+    () => new Map(installChecks.map((ic) => [ic.point_id, ic])),
+    [installChecks]
+  );
+  const installVisiblePoints = useMemo(
+    () => activePoints.filter((p) => installStatusFilter[installStatus(installChecksByPointId.get(p.id))]),
+    [activePoints, installChecksByPointId, installStatusFilter]
+  );
+  const installStatusFilterActive =
+    !installStatusFilter.not_started || !installStatusFilter.in_progress || !installStatusFilter.complete;
+  const installProgressByEquipment = useMemo(
+    () => buildInstallProgressByEquipment(activePoints, installChecksByPointId),
+    [activePoints, installChecksByPointId]
+  );
+  const overallInstallPct = Math.round(averageInstallProgress(activePoints, installChecksByPointId) * 100);
+  const installGroups = useMemo(() => {
+    const sorted = [...installVisiblePoints].sort((a, b) => {
+      const ta = equipmentById[a.equipment_id]?.tag ?? "";
+      const tb = equipmentById[b.equipment_id]?.tag ?? "";
+      return ta === tb ? a.point_number.localeCompare(b.point_number) : ta.localeCompare(tb);
+    });
+    const list: { equipmentId: string; items: Point[] }[] = [];
+    for (const p of sorted) {
+      const last = list[list.length - 1];
+      if (last && last.equipmentId === p.equipment_id) last.items.push(p);
+      else list.push({ equipmentId: p.equipment_id, items: [p] });
+    }
+    return list;
+  }, [installVisiblePoints, equipmentById]);
 
   // Custom attribute columns, printed after the fixed checklist fields --
   // every attribute assigned to this project, unconditionally (not only
@@ -173,10 +226,17 @@ export function PointsReport({
         <div className="report-mode-toggle">
           <button
             type="button"
-            className={`btn-secondary ${reportMode === "checklist" ? "btn-mode-active" : ""}`}
-            onClick={() => setReportMode("checklist")}
+            className={`btn-secondary ${reportMode === "install" ? "btn-mode-active" : ""}`}
+            onClick={() => setReportMode("install")}
           >
-            Checklist
+            Install
+          </button>
+          <button
+            type="button"
+            className={`btn-secondary ${reportMode === "commissioning" ? "btn-mode-active" : ""}`}
+            onClick={() => setReportMode("commissioning")}
+          >
+            Commissioning
           </button>
           <button
             type="button"
@@ -186,7 +246,7 @@ export function PointsReport({
             Issues
           </button>
         </div>
-        {reportMode === "checklist" ? (
+        {reportMode === "commissioning" ? (
           <>
             <div className="toolbar-label" style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <span>Status</span>
@@ -275,6 +335,23 @@ export function PointsReport({
               </button>
             </label>
           </>
+        ) : reportMode === "install" ? (
+          <>
+            <div className="toolbar-label" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span>Status</span>
+              {(Object.keys(INSTALL_STATUS_LABELS) as InstallStatus[]).map((s) => (
+                <label key={s} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                  <input
+                    type="checkbox"
+                    checked={installStatusFilter[s]}
+                    onChange={(e) => setInstallStatusFilter((prev) => ({ ...prev, [s]: e.target.checked }))}
+                  />
+                  {INSTALL_STATUS_LABELS[s]}
+                </label>
+              ))}
+            </div>
+            <div className="spacer" />
+          </>
         ) : (
           <>
             <label className="toolbar-label" style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -303,7 +380,7 @@ export function PointsReport({
             Generated{" "}
             {new Date().toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })}
           </span>
-          {reportMode === "checklist" ? (
+          {reportMode === "commissioning" ? (
             <>
               <span>
                 {statusFilterActive
@@ -316,6 +393,13 @@ export function PointsReport({
                 {commissionedBy ? commissionedBy : <span className="signoff-blank">{" ".repeat(20)}</span>}
               </span>
             </>
+          ) : reportMode === "install" ? (
+            <span>
+              {installStatusFilterActive
+                ? `${installVisiblePoints.length} of ${activePoints.length} points shown`
+                : `${activePoints.length} points`}
+              , {overallInstallPct}% complete
+            </span>
           ) : (
             <span>
               {issueRows.length} issue{issueRows.length === 1 ? "" : "s"}
@@ -327,7 +411,7 @@ export function PointsReport({
         </div>
       </div>
 
-      {reportMode === "checklist" ? (
+      {reportMode === "commissioning" ? (
         groups.length === 0 ? (
           <div className="empty-state">No points match the selected status filter.</div>
         ) : (
@@ -432,6 +516,93 @@ export function PointsReport({
                           </td>
                         </tr>
                       ))}
+                    </Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )
+      ) : reportMode === "install" ? (
+        installGroups.length === 0 ? (
+          <div className="empty-state">No points match the selected status filter.</div>
+        ) : (
+          <div className="table-wrap report-table-wrap">
+            <table className="data-table report-table">
+              <thead>
+                <tr>
+                  <th className="report-col-panel">Panel</th>
+                  <th className="report-col-point">Point #</th>
+                  <th className="checklist-name-col">Descriptor</th>
+                  {INSTALL_FIELDS.map((f) => (
+                    <th key={f} className="checklist-item-header">
+                      {INSTALL_FIELD_LABELS[f]}
+                    </th>
+                  ))}
+                  <th className="report-col-status divider-left">Status</th>
+                  <th className="report-col-notes divider-left">Notes</th>
+                  <th className="report-col-blocked">Blocked By</th>
+                </tr>
+              </thead>
+              <tbody>
+                {installGroups.map((g) => {
+                  const eq = equipmentById[g.equipmentId];
+                  const pct = installProgressByEquipment.get(g.equipmentId) ?? 0;
+                  return (
+                    <Fragment key={g.equipmentId}>
+                      <tr className="table-group-header">
+                        <td colSpan={3 + INSTALL_FIELDS.length + 3}>
+                          {eq?.tag ?? g.equipmentId}
+                          {eq?.location ? ` — ${eq.location}` : ""}{" "}
+                          <span className="count-pill">{g.items.length}</span>{" "}
+                          <span
+                            className={`progress-pill ${
+                              pct > 90 ? "progress-pill-high" : pct < 10 ? "progress-pill-low" : ""
+                            }`}
+                          >
+                            {pct}%
+                          </span>
+                        </td>
+                      </tr>
+                      {g.items.map((point) => {
+                        const check = installChecksByPointId.get(point.id);
+                        const status = installStatus(check);
+                        return (
+                          <tr key={point.id}>
+                            <td className="report-col-panel">{displayPanel(point.panel)}</td>
+                            <td className="report-col-point">{resolvedPointNumber(point)}</td>
+                            <td className="truncate checklist-name-col" title={point.descriptor}>
+                              {point.descriptor}
+                            </td>
+                            {INSTALL_FIELDS.map((field) => {
+                              const value = check ? check[field] : "";
+                              return (
+                                <td key={field} className={`checklist-cell checklist-${value || "empty"}`}>
+                                  {SYMBOL[value]}
+                                </td>
+                              );
+                            })}
+                            <td className="report-col-status divider-left">
+                              <span className={`status-pill status-${status}`}>{INSTALL_STATUS_LABELS[status]}</span>
+                            </td>
+                            <td className="report-col-notes divider-left">{point.notes || "—"}</td>
+                            <td className="report-col-blocked">
+                              {(() => {
+                                const openCount = openIssueCount(issuesByPointId.get(point.id));
+                                return (
+                                  openCount > 0 && (
+                                    <span className="issue-count-pill-danger">
+                                      <span className="issue-icon">!</span> {openCount} open issue
+                                      {openCount === 1 ? "" : "s"}
+                                    </span>
+                                  )
+                                );
+                              })()}{" "}
+                              {point.blocked_by || "—"}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </Fragment>
                   );
                 })}
