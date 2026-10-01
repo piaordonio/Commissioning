@@ -476,7 +476,7 @@ export function PointsCardList({
                                 return (
                                   <button
                                     type="button"
-                                    className={openCount > 0 ? "icon-btn issue-count-pill" : "icon-btn issue-flag"}
+                                    className={openCount > 0 ? "icon-btn issue-count-pill-danger" : "icon-btn issue-flag"}
                                     title={
                                       openCount > 0
                                         ? `${openCount} open issue${openCount === 1 ? "" : "s"}`

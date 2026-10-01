@@ -611,6 +611,22 @@ textarea {
   color: #9a3412;
 }
 
+/* Same icon/count/"open issue(s)" layout as .issue-count-pill above, but a
+   light red fill instead of that orange -- used specifically for the
+   Blocked By flag (grid, mobile card list, printed report), which reads as
+   a blocker/warning on that one point rather than the equipment-level
+   rollup the orange pill summarizes. Same red .issue-flag-active already
+   uses elsewhere. */
+.issue-count-pill-danger {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  background: #fee2e2;
+  color: var(--danger);
+}
+
 /* A solid circle rather than a warning-triangle glyph -- consistent,
    controllable rendering (a Unicode warning sign's shape/color varies by
    platform/font) and the same red as .issue-flag-active. */

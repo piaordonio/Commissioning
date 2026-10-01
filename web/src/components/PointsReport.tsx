@@ -421,7 +421,7 @@ export function PointsReport({
                               const openCount = openIssueCount(issuesByPointId.get(point.id));
                               return (
                                 openCount > 0 && (
-                                  <span className="issue-count-pill">
+                                  <span className="issue-count-pill-danger">
                                     <span className="issue-icon">!</span> {openCount} open issue
                                     {openCount === 1 ? "" : "s"}
                                   </span>
