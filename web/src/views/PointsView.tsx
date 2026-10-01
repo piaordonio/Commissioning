@@ -27,7 +27,7 @@ import {
 } from "../installProgress";
 import { resolvedPointNumber, displayPanel } from "../pointNumber";
 import { autoFitColumnWidth } from "../textWidth";
-import { formatDateCommissioned } from "../formatDate";
+import { formatDateCommissioned, MONTH_ABBR } from "../formatDate";
 import { SYMBOL, nextCheckState } from "../checklistCycle";
 import { usePointRows } from "../usePointRows";
 import { buildOpenIssueCountByEquipment, groupIssuesByPointId, openIssueCount } from "../issues";
@@ -198,6 +198,23 @@ export function PointsView({
   );
   const notesColWidth = useMemo(
     () => autoFitColumnWidth(rows.map((p) => p.notes || "—"), "Notes", NOTES_FONT, HEADER_FONT),
+    [rows]
+  );
+
+  // Sized from the date values only (headerLabel "" excludes "Date
+  // Commissioned" itself, which wraps onto its own lines instead -- see
+  // .checklist-item-header-attr's reuse below). Every month abbreviation is
+  // measured as a same-day/year candidate, not just rows that currently
+  // have a date, so the column doesn't later reflow/clip the first time a
+  // point is marked Commissioned in a wider month like "Sep".
+  const dateCommissionedColWidth = useMemo(
+    () =>
+      autoFitColumnWidth(
+        [...rows.map((p) => formatDateCommissioned(p.date_commissioned)), ...MONTH_ABBR.map((m) => `${m}-01-2026`)],
+        "",
+        BODY_FONT,
+        HEADER_FONT
+      ),
     [rows]
   );
 
@@ -604,7 +621,12 @@ export function PointsView({
                 {showCommissioning && (
                   <>
                     <th className="divider-left">Status</th>
-                    <th className="divider-left">Date Commissioned</th>
+                    <th
+                      className="divider-left checklist-item-header-attr"
+                      style={{ width: dateCommissionedColWidth }}
+                    >
+                      Date Commissioned
+                    </th>
                   </>
                 )}
                 <th className="divider-left" style={{ width: notesColWidth }}>
@@ -788,7 +810,9 @@ export function PointsView({
                                   {point.status === "commissioned" ? "Revert" : "Mark Commissioned"}
                                 </button>
                               </td>
-                              <td className="divider-left">{formatDateCommissioned(point.date_commissioned)}</td>
+                              <td className="divider-left" style={{ width: dateCommissionedColWidth }}>
+                                {formatDateCommissioned(point.date_commissioned)}
+                              </td>
                             </>
                           )}
                           <td className="divider-left checklist-text-col checklist-notes-col">
@@ -834,7 +858,13 @@ export function PointsView({
                                   }}
                                   onKeyDown={(e) => e.stopPropagation()}
                                 >
-                                  {openCount > 0 ? `! ${openCount}` : "⚑"}
+                                  {openCount > 0 ? (
+                                    <>
+                                      <span className="issue-icon">!</span> {openCount}
+                                    </>
+                                  ) : (
+                                    "⚑"
+                                  )}
                                 </button>
                               );
                             })()}
