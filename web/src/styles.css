@@ -129,10 +129,13 @@ button {
 }
 
 .icon-btn {
+  appearance: none;
+  -webkit-appearance: none;
   border: none;
   background: none;
   cursor: pointer;
   font-size: 16px;
+  font-family: inherit;
   color: var(--text-muted);
 }
 .icon-btn:disabled {
