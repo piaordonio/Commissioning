@@ -29,6 +29,7 @@ import { buildIssueRows, groupIssuesByPointId, openIssueCount } from "../issues"
 import { attributesForProject, buildAttributeValueMap, getAttributeValue, isAttrValueNA, ATTR_NA_DISPLAY } from "../pointAttributes";
 import { resolvedPointNumber, displayPanel } from "../pointNumber";
 import { formatDateCommissioned, formatTimestamp } from "../formatDate";
+import { downloadXlsx, sanitizeFilenamePart } from "../exportXlsx";
 
 const COMMISSIONED_BY_NAMES_KEY = "commissioning-points-commissioned-by-names";
 
@@ -217,6 +218,114 @@ export function PointsReport({
     return list;
   }, [issueRows]);
 
+  // Flattens whatever's currently on screen into a worksheet -- same filters,
+  // same columns, same cell text (checkmark symbols, N/A display, status
+  // labels) as the table being looked at, just one row per point instead of
+  // the table's grouped/merged header rows. An "Equipment" column stands in
+  // for those group headers so the sheet still sorts/filters by panel in
+  // Excel.
+  const handleExportXlsx = () => {
+    const projectLabel = project.project_number ? `${project.project_number} - ${project.name}` : project.name;
+    const filenameBase = sanitizeFilenamePart(projectLabel);
+
+    if (reportMode === "commissioning") {
+      const header = [
+        "Equipment",
+        "Location",
+        "Panel",
+        "Point #",
+        "Descriptor",
+        ...CHECK_FIELDS.map((f) => CHECK_FIELD_LABELS[f]),
+        ...attrs.map((a) => a.short_text || a.name),
+        "Status",
+        ...(hideDateCommissioned ? [] : ["Date Commissioned"]),
+        "Notes",
+        "Blocked By",
+      ];
+      const rows = groups.flatMap((g) => {
+        const eq = equipmentById[g.equipmentId];
+        return g.items.map((point) => [
+          eq?.tag ?? g.equipmentId,
+          eq?.location ?? "",
+          displayPanel(point.panel),
+          resolvedPointNumber(point),
+          point.descriptor,
+          ...CHECK_FIELDS.map((field) => SYMBOL[point[field]]),
+          ...attrs.map((a) => {
+            const value = getAttributeValue(attrValueMap, point.id, a.id);
+            return a.attr_type === "boolean" ? SYMBOL[value as CheckState] : isAttrValueNA(value) ? ATTR_NA_DISPLAY : value;
+          }),
+          POINT_STATUS_LABELS[point.status],
+          ...(hideDateCommissioned ? [] : [formatDateCommissioned(point.date_commissioned)]),
+          point.notes || "",
+          point.blocked_by || "",
+        ]);
+      });
+      downloadXlsx(`${filenameBase} - Commissioning Report.xlsx`, "Commissioning", [header, ...rows]);
+    } else if (reportMode === "install") {
+      const header = [
+        "Equipment",
+        "Location",
+        "Panel",
+        "Point #",
+        "Descriptor",
+        ...INSTALL_FIELDS.map((f) => INSTALL_FIELD_LABELS[f]),
+        "Status",
+        "Notes",
+        "Blocked By",
+      ];
+      const rows = installGroups.flatMap((g) => {
+        const eq = equipmentById[g.equipmentId];
+        return g.items.map((point) => {
+          const check = installChecksByPointId.get(point.id);
+          return [
+            eq?.tag ?? g.equipmentId,
+            eq?.location ?? "",
+            displayPanel(point.panel),
+            resolvedPointNumber(point),
+            point.descriptor,
+            ...INSTALL_FIELDS.map((field) => SYMBOL[check ? check[field] : ""]),
+            INSTALL_STATUS_LABELS[installStatus(check)],
+            point.notes || "",
+            point.blocked_by || "",
+          ];
+        });
+      });
+      downloadXlsx(`${filenameBase} - Install Report.xlsx`, "Install", [header, ...rows]);
+    } else {
+      const header = [
+        "Equipment",
+        "Location",
+        "Panel",
+        "Point #",
+        "Descriptor",
+        "Issue",
+        "Recommended Action",
+        "Status",
+        "Date Created",
+        "Date Closed",
+        "Notes",
+      ];
+      const rows = issueGroups.flatMap((g) => {
+        const eq = equipmentById[g.equipmentId];
+        return g.items.map(({ issue, point }) => [
+          eq?.tag ?? g.equipmentId,
+          eq?.location ?? "",
+          displayPanel(point.panel),
+          resolvedPointNumber(point),
+          point.descriptor,
+          issue.description,
+          issue.recommended_action || "",
+          ISSUE_STATUS_LABELS[issue.status],
+          formatTimestamp(issue.created_at),
+          issue.closed_at ? formatTimestamp(issue.closed_at) : "",
+          issue.notes || "",
+        ]);
+      });
+      downloadXlsx(`${filenameBase} - Issues Report.xlsx`, "Issues", [header, ...rows]);
+    }
+  };
+
   return (
     <div className="view">
       <div className="toolbar no-print">
@@ -365,6 +474,9 @@ export function PointsReport({
             <div className="spacer" />
           </>
         )}
+        <button type="button" className="btn-secondary" onClick={handleExportXlsx}>
+          Export XLS
+        </button>
         <button type="button" className="btn-primary" onClick={() => window.print()}>
           Print
         </button>

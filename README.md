@@ -611,6 +611,19 @@ punch list is often the moment you notice something needs a status update
 or a follow-up note, so fixing it shouldn't mean leaving the report to hunt
 the point down in the grid.
 
+**Export XLS**, next to Print, downloads whichever of the three modes is
+currently selected as a `.xlsx` workbook (`web/src/exportXlsx.ts`, built on
+[SheetJS](https://www.npmjs.com/package/xlsx)) instead of a printout —
+same filtered rows, same column set and cell text (check symbols, status
+labels, N/A display) as the table on screen at the moment you click it, one
+row per point rather than the table's merged group-header rows (an
+"Equipment"/"Location" column takes their place so the sheet still
+sorts/filters by panel in Excel). Toggling "Hide Date Commissioned column"
+or either Status filter before exporting changes the download the same way
+it changes the printout. Each mode writes a single sheet (Commissioning,
+Install, or Issues) named after itself, as
+`<project number> - <project name> - <Mode> Report.xlsx`.
+
 ## Stack
 
 Vite + React + TypeScript, talking directly to [Supabase](https://supabase.com)
