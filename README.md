@@ -612,16 +612,20 @@ or a follow-up note, so fixing it shouldn't mean leaving the report to hunt
 the point down in the grid.
 
 **Export XLS**, next to Print, downloads whichever of the three modes is
-currently selected as a `.xlsx` workbook (`web/src/exportXlsx.ts`, built on
-[SheetJS](https://www.npmjs.com/package/xlsx)) instead of a printout —
-same filtered rows, same column set and cell text (check symbols, status
-labels, N/A display) as the table on screen at the moment you click it, one
-row per point rather than the table's merged group-header rows (an
-"Equipment"/"Location" column takes their place so the sheet still
-sorts/filters by panel in Excel). Toggling "Hide Date Commissioned column"
-or either Status filter before exporting changes the download the same way
-it changes the printout. Each mode writes a single sheet (Commissioning,
-Install, or Issues) named after itself, as
+currently selected as a formatted `.xlsx` workbook (`web/src/exportXlsx.ts`,
+built on [ExcelJS](https://www.npmjs.com/package/exceljs)) rather than a
+plain data dump — the Ainsworth letterhead and project title, the same
+merged blue equipment-group header bars (with point count and % complete),
+colored status cells (green/amber/grey matching the on-screen pills),
+colored check/✗/N/A checklist cells, and a red "! N open issues" callout
+inline in Blocked By, all built to the same hex colors as `styles.css`
+(hand-mirrored there in a `COLOR` constant — there's no shared source of
+truth between the two, so a palette change needs updating both places).
+Same filtered rows and column set as the table on screen at the moment you
+click it; toggling "Hide Date Commissioned column" or either Status filter
+before exporting changes the download the same way it changes the
+printout. Each mode writes a single sheet (Commissioning, Install, or
+Issues) named after itself, as
 `<project number> - <project name> - <Mode> Report.xlsx`.
 
 ## Stack
