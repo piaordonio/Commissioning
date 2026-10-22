@@ -243,6 +243,13 @@ create index if not exists idx_issues_open on issues(status) where status = 'ope
 -- Stamped from the request's JWT at insert time -- api.create("projects", ...)
 -- in web/src/api.ts needs no code change, Postgres fills this in on its own.
 alter table projects add column if not exists owner_id uuid references auth.users(id) default auth.uid();
+-- Separate and unconditional, unlike the ADD COLUMN above: "if not exists"
+-- is a full no-op (default included) if the column is already there for any
+-- reason -- a partial earlier run, an experiment, anything -- which would
+-- otherwise leave a database stuck with a defaultless owner_id forever,
+-- failing every new project's insert against the WITH CHECK below with no
+-- obvious cause. This line re-asserts the default regardless of history.
+alter table projects alter column owner_id set default auth.uid();
 
 -- A supervisor who can see every project, not just their own -- add someone
 -- with a one-line insert in the SQL Editor, no redeploy needed. Deliberately
