@@ -87,6 +87,29 @@ body {
   color: var(--text-muted);
 }
 
+.auth-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  padding: 20px;
+}
+
+.auth-form {
+  width: 100%;
+  max-width: 340px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 28px;
+}
+
+.auth-title {
+  justify-content: center;
+  margin-bottom: 8px;
+  font-size: 16px;
+}
+
 button {
   font-family: inherit;
 }
@@ -1272,6 +1295,16 @@ textarea {
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
+}
+
+.dashboard-installers {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel);
 }
 
 .dashboard-columns {

@@ -170,6 +170,57 @@ export const api = {
     if (error) throw new Error(error.message);
   },
 
+  // The one write an installer can make on `points` itself (see
+  // installer_update_point in supabase/schema.sql) -- RLS has no UPDATE
+  // policy for them on this table at all, since there's no row-level way to
+  // restrict that to just these two columns while an owner's own policy
+  // also exists on the same table.
+  installerUpdatePoint: async (pointId: string, notes: string, blockedBy: string): Promise<void> => {
+    const { error } = await supabase.rpc("installer_update_point", {
+      p_point_id: pointId,
+      p_notes: notes,
+      p_blocked_by: blockedBy,
+    });
+    if (error) throw new Error(error.message);
+  },
+
+  // true only for an account listed in admin_users -- see is_admin() in
+  // supabase/schema.sql. Checked once after login to decide which shell to
+  // render (see App.tsx), same question RLS itself answers server-side for
+  // every query; this is just the client's own copy of that answer.
+  isAdmin: async (userId: string): Promise<boolean> => {
+    const { data, error } = await supabase.rpc("is_admin", { uid: userId });
+    if (error) throw new Error(error.message);
+    return !!data;
+  },
+
+  // project_installers rows for one project -- the "who's invited" list
+  // behind the Add Installer screen (ProjectDashboard.tsx). RLS already
+  // scopes this to a project's own owner/admin, same as everything else.
+  listProjectInstallers: async <T>(projectId: string): Promise<T[]> => {
+    const { data, error } = await supabase.from("project_installers").select("*").eq("project_id", projectId);
+    return assertNoError(data as T[] | null, error);
+  },
+
+  // Inserts a pending (user_id null) invite -- activated the moment that
+  // email signs up, see activate_pending_installer_invites() in
+  // supabase/schema.sql. Plain insert, no RPC needed: this is a single-row
+  // write with no multi-statement atomicity concern the way import/bulk-set
+  // have.
+  inviteInstaller: async <T>(projectId: string, email: string): Promise<T> => {
+    const { data, error } = await supabase
+      .from("project_installers")
+      .insert({ project_id: projectId, email: email.trim().toLowerCase() })
+      .select()
+      .single();
+    return assertNoError(data as T | null, error);
+  },
+
+  revokeInstaller: async (projectId: string, email: string): Promise<void> => {
+    const { error } = await supabase.from("project_installers").delete().eq("project_id", projectId).eq("email", email);
+    if (error) throw new Error(error.message);
+  },
+
   // Also one transaction server-side (import_points in supabase/schema.sql):
   // either every equipment/point row from the parsed import lands, or none
   // do. Non-destructive: matches existing equipment (by tag) and points (by

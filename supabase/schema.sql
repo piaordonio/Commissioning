@@ -233,6 +233,116 @@ create index if not exists idx_issues_point on issues(point_id);
 -- status = 'open' across many rows at once.
 create index if not exists idx_issues_open on issues(status) where status = 'open';
 
+-- ---- Auth: project ownership + restricted installer role ----
+-- Added once this app gained its first real login (Supabase Auth) --
+-- everything above predates per-user accounts entirely, which is why
+-- owner_id defaults to auth.uid() rather than being required at insert, and
+-- every statement here is an idempotent add against a database that may
+-- already hold real data.
+
+-- Stamped from the request's JWT at insert time -- api.create("projects", ...)
+-- in web/src/api.ts needs no code change, Postgres fills this in on its own.
+alter table projects add column if not exists owner_id uuid references auth.users(id) default auth.uid();
+
+-- A supervisor who can see every project, not just their own -- add someone
+-- with a one-line insert in the SQL Editor, no redeploy needed. Deliberately
+-- not a general roles/permissions table: this is the one cross-cutting
+-- override this app needs, not a framework for every future one.
+create table if not exists admin_users (
+  user_id uuid primary key references auth.users(id)
+);
+
+-- language sql / not security definer -- runs with the caller's own RLS, so
+-- it only ever sees its own row in admin_users (see that table's own select
+-- policy below), which is exactly enough for this to answer correctly for
+-- every caller: an admin sees their row and gets true, anyone else sees no
+-- matching row and gets false, and nobody can enumerate the admin list.
+create or replace function is_admin(uid uuid)
+returns boolean
+language sql
+stable
+as $$
+  select exists (select 1 from admin_users where user_id = uid);
+$$;
+
+-- Field installers: a second, restricted kind of account, granted access to
+-- specific projects by that project's owner rather than owning any
+-- themselves. email starts a row before that person has ever signed up
+-- (user_id null) -- "invite by email" has to work before an account exists
+-- to invite -- and the trigger below fills user_id in the moment they do.
+create table if not exists project_installers (
+  project_id uuid not null references projects(id) on delete cascade,
+  email text not null,
+  user_id uuid references auth.users(id),
+  invited_by uuid references auth.users(id) default auth.uid(),
+  created_at timestamptz not null default now(),
+  primary key (project_id, email)
+);
+
+create or replace function is_installer_on(p_project_id uuid)
+returns boolean
+language sql
+stable
+as $$
+  select exists (
+    select 1 from project_installers
+    where project_id = p_project_id and user_id = auth.uid()
+  );
+$$;
+
+-- Activates every pending invite for an email the instant that person signs
+-- up. Supabase Auth's sign-up is public (anyone can create an account) --
+-- that's what lets "Add Installer" work without a privileged server
+-- component: an unsolicited sign-up just gets an account with nothing
+-- assigned to it yet, inert until an owner has already invited that exact
+-- email to a project. Runs in the elevated context of a GoTrue sign-up
+-- (not a normal `authenticated`-role request), so it isn't itself subject
+-- to project_installers' own RLS policies below.
+create or replace function activate_pending_installer_invites()
+returns trigger
+language plpgsql
+as $$
+begin
+  update project_installers set user_id = new.id
+    where email = new.email and user_id is null;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_activate_installer_invites on auth.users;
+create trigger trg_activate_installer_invites
+  after insert on auth.users
+  for each row execute function activate_pending_installer_invites();
+
+-- The one write an installer needs on `points` itself (Notes/Blocked By).
+-- Postgres RLS is row-level, not column-level -- there's no policy clause
+-- that lets an installer UPDATE a point but only touch two of its columns
+-- while an owner's own blanket policy also exists on the same table. Same
+-- field-allowlist-via-RPC pattern bulk_set_points/bulk_set_install_checks
+-- below already use for the same reason, just fixed to these two fields and
+-- gated by is_installer_on() instead of an allowlist array. No RLS UPDATE
+-- policy exists for installers on `points` at all (see below) -- this RPC
+-- is the only path, and it checks authorization itself since the table-
+-- level policy can't express "these two columns only."
+create or replace function installer_update_point(p_point_id uuid, p_notes text, p_blocked_by text)
+returns void
+language plpgsql
+as $$
+declare
+  v_project_id uuid;
+begin
+  select e.project_id into v_project_id
+    from points p join equipment e on e.id = p.equipment_id
+    where p.id = p_point_id;
+
+  if v_project_id is null or not is_installer_on(v_project_id) then
+    raise exception 'Not authorized to update this point';
+  end if;
+
+  update points set notes = coalesce(p_notes, ''), blocked_by = coalesce(p_blocked_by, '') where id = p_point_id;
+end;
+$$;
+
 -- ---- Keep updated_at current on every UPDATE, regardless of caller ----
 
 create or replace function set_updated_at()
@@ -519,6 +629,15 @@ declare
   v_new_points_json jsonb;
   v_deactivated_points_json jsonb;
 begin
+  -- Installers never import -- not in their capability list -- and this
+  -- would otherwise be callable directly against the REST endpoint by
+  -- anyone holding a valid JWT regardless of whether the UI offers a
+  -- button for it, so the check has to live here, not just in the absence
+  -- of a menu item.
+  if not (is_admin(auth.uid()) or exists (select 1 from projects where id = p_project_id and owner_id = auth.uid())) then
+    raise exception 'Not authorized to import into this project';
+  end if;
+
   create temporary table if not exists _import_id_map (temp_id text primary key, real_id uuid) on commit drop;
   create temporary table if not exists _touched_equipment (id uuid primary key) on commit drop;
   create temporary table if not exists _touched_points (id uuid primary key) on commit drop;
@@ -666,7 +785,19 @@ create or replace function pair_reimported_point(p_old_point_id uuid, p_new_poin
 returns void
 language plpgsql
 as $$
+declare
+  v_project_id uuid;
 begin
+  -- Installers never reconcile a re-import -- same "callable directly
+  -- regardless of UI" reasoning as import_points() above.
+  select e.project_id into v_project_id
+    from points p join equipment e on e.id = p.equipment_id
+    where p.id = p_old_point_id;
+
+  if v_project_id is null or not (is_admin(auth.uid()) or exists (select 1 from projects where id = v_project_id and owner_id = auth.uid())) then
+    raise exception 'Not authorized to pair these points';
+  end if;
+
   update points as new_pt
     set wired = old_pt.wired,
         tagged = old_pt.tagged,
@@ -726,9 +857,9 @@ end;
 $$;
 
 -- Applies the checklist grid's range-fill / paste as one transaction.
--- Field names are allowlisted before being used in dynamic SQL — this runs
--- with the anon key, which is public (ships in the client bundle), so it
--- must not trust the field name from the request body.
+-- Field names are allowlisted before being used in dynamic SQL -- the
+-- request body is still untrusted input regardless of which logged-in
+-- user sent it, so this must not trust the field name it carries.
 create or replace function bulk_set_points(p_updates jsonb)
 returns void
 language plpgsql
@@ -736,13 +867,28 @@ as $$
 declare
   v_item jsonb;
   v_field text;
+  v_point_id uuid;
   v_allowed text[] := array['wired', 'tagged', 'calibrate', 'function_test', 'sequence', 'alarm', 'graphics', 'notes', 'blocked_by'];
 begin
   for v_item in select * from jsonb_array_elements(p_updates) loop
     v_field := v_item->>'field';
+    v_point_id := (v_item->>'id')::uuid;
+    -- These are the 7 Commissioning fields (plus notes/blocked_by) -- not in
+    -- an installer's capability list, and this RPC is callable directly
+    -- against the REST endpoint regardless of whether the UI offers a
+    -- button for it, same reasoning as import_points()/pair_reimported_point()
+    -- above. Checked per-row (there's no single project_id parameter to
+    -- check once) -- one unauthorized row fails the whole batch, same
+    -- all-or-nothing contract the rest of this function already has.
+    if not (is_admin(auth.uid()) or exists (
+      select 1 from points p join equipment e on e.id = p.equipment_id join projects pr on pr.id = e.project_id
+      where p.id = v_point_id and pr.owner_id = auth.uid()
+    )) then
+      raise exception 'Not authorized to update point %', v_point_id;
+    end if;
     if v_field = any(v_allowed) then
       execute format('update points set %I = $1, updated_at = now() where id = $2', v_field)
-        using (v_item->>'value'), (v_item->>'id')::uuid;
+        using (v_item->>'value'), v_point_id;
     end if;
   end loop;
 end;
@@ -784,11 +930,21 @@ language plpgsql
 as $$
 declare
   v_item jsonb;
+  v_point_id uuid;
 begin
   for v_item in select * from jsonb_array_elements(p_updates) loop
+    v_point_id := (v_item->>'id')::uuid;
+    -- Checking against a controller export isn't in an installer's
+    -- capability list -- same reasoning as the other guarded RPCs above.
+    if not (is_admin(auth.uid()) or exists (
+      select 1 from points p join equipment e on e.id = p.equipment_id join projects pr on pr.id = e.project_id
+      where p.id = v_point_id and pr.owner_id = auth.uid()
+    )) then
+      raise exception 'Not authorized to update point %', v_point_id;
+    end if;
     update points
       set on_controller = (v_item->>'on_controller')::boolean
-      where id = (v_item->>'id')::uuid;
+      where id = v_point_id;
   end loop;
 end;
 $$;
@@ -859,12 +1015,27 @@ end;
 $$;
 
 -- ---- Row Level Security ----
--- No auth system exists yet — this is a single-team internal tool, so RLS
--- is enabled with explicit "anon can do everything" policies rather than
--- left disabled, so the openness is a deliberate, visible choice instead of
--- an oversight. The anon key ships in the client bundle either way; if this
--- tool ever gets real user accounts, these policies are the first thing to
--- tighten (e.g. scope by project membership).
+-- Three kinds of access, from here down: a project's owner (full read/write
+-- on everything under it), an admin (every project, via is_admin() --
+-- add someone with one SQL Editor insert into admin_users), and a field
+-- installer (read + Install-checklist-only write, on only the project(s)
+-- they're explicitly invited to via project_installers). anon has none of
+-- it -- every policy below requires auth.uid() is not null one way or
+-- another, which is what actually locks the door now that this app has a
+-- real login; the anon key still ships in the client bundle by design, it
+-- just no longer unlocks anything.
+--
+-- `projects`/`equipment`/`points` each need SELECT to allow all three
+-- (owner/admin/installer) while INSERT/UPDATE/DELETE allow only
+-- owner/admin -- two separate policies per table, not one. A single "for
+-- all" policy whose USING clause included the installer check would have
+-- quietly let an installer DELETE a project/equipment/point too: DELETE in
+-- Postgres RLS only ever consults USING, never WITH CHECK, so a WITH CHECK
+-- restricted to owner/admin does NOT save you on the delete path the way
+-- it does on update. `install_checks`/`issues`-and-select/insert/update
+-- don't have that asymmetry (installers are meant to fully own those
+-- within their assigned project), so those stay single broader policies;
+-- `issues` DELETE still gets its own owner/admin-only policy, same reason.
 
 alter table projects enable row level security;
 alter table equipment enable row level security;
@@ -875,38 +1046,212 @@ alter table point_attributes enable row level security;
 alter table point_attribute_projects enable row level security;
 alter table point_attribute_options enable row level security;
 alter table point_attribute_values enable row level security;
+alter table admin_users enable row level security;
+alter table project_installers enable row level security;
 
+-- projects
 drop policy if exists "anon full access" on projects;
-create policy "anon full access" on projects for all using (true) with check (true);
+drop policy if exists "select: owner, admin, or assigned installer" on projects;
+create policy "select: owner, admin, or assigned installer" on projects for select using (
+  owner_id = auth.uid() or is_admin(auth.uid()) or is_installer_on(id)
+);
+drop policy if exists "write: owner or admin only" on projects;
+create policy "write: owner or admin only" on projects for all using (
+  owner_id = auth.uid() or is_admin(auth.uid())
+) with check (
+  owner_id = auth.uid() or is_admin(auth.uid())
+);
 
+-- equipment
 drop policy if exists "anon full access" on equipment;
-create policy "anon full access" on equipment for all using (true) with check (true);
+drop policy if exists "select: owner, admin, or assigned installer" on equipment;
+create policy "select: owner, admin, or assigned installer" on equipment for select using (
+  exists (
+    select 1 from projects pr where pr.id = equipment.project_id
+      and (pr.owner_id = auth.uid() or is_admin(auth.uid()) or is_installer_on(pr.id))
+  )
+);
+drop policy if exists "write: owner or admin only" on equipment;
+create policy "write: owner or admin only" on equipment for all using (
+  exists (select 1 from projects pr where pr.id = equipment.project_id and (pr.owner_id = auth.uid() or is_admin(auth.uid())))
+) with check (
+  exists (select 1 from projects pr where pr.id = equipment.project_id and (pr.owner_id = auth.uid() or is_admin(auth.uid())))
+);
 
+-- points -- no installer write policy at all (see installer_update_point()
+-- above for the one write -- notes/blocked_by -- an installer can make).
 drop policy if exists "anon full access" on points;
-create policy "anon full access" on points for all using (true) with check (true);
+drop policy if exists "select: owner, admin, or assigned installer" on points;
+create policy "select: owner, admin, or assigned installer" on points for select using (
+  exists (
+    select 1 from equipment e join projects pr on pr.id = e.project_id
+    where e.id = points.equipment_id
+      and (pr.owner_id = auth.uid() or is_admin(auth.uid()) or is_installer_on(pr.id))
+  )
+);
+drop policy if exists "write: owner or admin only" on points;
+create policy "write: owner or admin only" on points for all using (
+  exists (
+    select 1 from equipment e join projects pr on pr.id = e.project_id
+    where e.id = points.equipment_id and (pr.owner_id = auth.uid() or is_admin(auth.uid()))
+  )
+) with check (
+  exists (
+    select 1 from equipment e join projects pr on pr.id = e.project_id
+    where e.id = points.equipment_id and (pr.owner_id = auth.uid() or is_admin(auth.uid()))
+  )
+);
 
+-- install_checks -- entirely installer-owned within their assigned
+-- project(s), no column-level split needed the way points has, so one
+-- policy for every command is correct here (unlike points/projects/
+-- equipment above).
 drop policy if exists "anon full access" on install_checks;
-create policy "anon full access" on install_checks for all using (true) with check (true);
+drop policy if exists "owner, admin, or assigned installer" on install_checks;
+create policy "owner, admin, or assigned installer" on install_checks for all using (
+  exists (
+    select 1 from points p join equipment e on e.id = p.equipment_id join projects pr on pr.id = e.project_id
+    where p.id = install_checks.point_id
+      and (pr.owner_id = auth.uid() or is_admin(auth.uid()) or is_installer_on(pr.id))
+  )
+) with check (
+  exists (
+    select 1 from points p join equipment e on e.id = p.equipment_id join projects pr on pr.id = e.project_id
+    where p.id = install_checks.point_id
+      and (pr.owner_id = auth.uid() or is_admin(auth.uid()) or is_installer_on(pr.id))
+  )
+);
 
+-- issues -- select/insert/update open to an assigned installer ("log/view
+-- Issues" is in their capability list); delete is owner/admin only, same
+-- DELETE-only-consults-USING reasoning as projects/equipment/points above.
 drop policy if exists "anon full access" on issues;
-create policy "anon full access" on issues for all using (true) with check (true);
+drop policy if exists "select: owner, admin, or assigned installer" on issues;
+create policy "select: owner, admin, or assigned installer" on issues for select using (
+  exists (
+    select 1 from points p join equipment e on e.id = p.equipment_id join projects pr on pr.id = e.project_id
+    where p.id = issues.point_id
+      and (pr.owner_id = auth.uid() or is_admin(auth.uid()) or is_installer_on(pr.id))
+  )
+);
+drop policy if exists "insert: owner, admin, or assigned installer" on issues;
+create policy "insert: owner, admin, or assigned installer" on issues for insert with check (
+  exists (
+    select 1 from points p join equipment e on e.id = p.equipment_id join projects pr on pr.id = e.project_id
+    where p.id = issues.point_id
+      and (pr.owner_id = auth.uid() or is_admin(auth.uid()) or is_installer_on(pr.id))
+  )
+);
+drop policy if exists "update: owner, admin, or assigned installer" on issues;
+create policy "update: owner, admin, or assigned installer" on issues for update using (
+  exists (
+    select 1 from points p join equipment e on e.id = p.equipment_id join projects pr on pr.id = e.project_id
+    where p.id = issues.point_id
+      and (pr.owner_id = auth.uid() or is_admin(auth.uid()) or is_installer_on(pr.id))
+  )
+) with check (
+  exists (
+    select 1 from points p join equipment e on e.id = p.equipment_id join projects pr on pr.id = e.project_id
+    where p.id = issues.point_id
+      and (pr.owner_id = auth.uid() or is_admin(auth.uid()) or is_installer_on(pr.id))
+  )
+);
+drop policy if exists "delete: owner or admin only" on issues;
+create policy "delete: owner or admin only" on issues for delete using (
+  exists (
+    select 1 from points p join equipment e on e.id = p.equipment_id join projects pr on pr.id = e.project_id
+    where p.id = issues.point_id and (pr.owner_id = auth.uid() or is_admin(auth.uid()))
+  )
+);
 
+-- point_attributes / point_attribute_options -- attribute *definitions*
+-- (shared vocabulary like "Fail Position"), not project data: readable/
+-- writable by any authenticated user, not owner-scoped, same design intent
+-- this schema already had before per-user accounts existed. No installer
+-- access at all, same as point_attribute_projects/point_attribute_values
+-- below -- custom attributes are outside an installer's capability list
+-- entirely.
 drop policy if exists "anon full access" on point_attributes;
-create policy "anon full access" on point_attributes for all using (true) with check (true);
-
-drop policy if exists "anon full access" on point_attribute_projects;
-create policy "anon full access" on point_attribute_projects for all using (true) with check (true);
+drop policy if exists "authenticated full access" on point_attributes;
+create policy "authenticated full access" on point_attributes for all using (auth.uid() is not null) with check (auth.uid() is not null);
 
 drop policy if exists "anon full access" on point_attribute_options;
-create policy "anon full access" on point_attribute_options for all using (true) with check (true);
+drop policy if exists "authenticated full access" on point_attribute_options;
+create policy "authenticated full access" on point_attribute_options for all using (auth.uid() is not null) with check (auth.uid() is not null);
 
+-- point_attribute_projects -- the per-project assignment (unlike the
+-- definitions above, this IS project data) -- owner/admin only.
+drop policy if exists "anon full access" on point_attribute_projects;
+drop policy if exists "owner or admin only" on point_attribute_projects;
+create policy "owner or admin only" on point_attribute_projects for all using (
+  exists (select 1 from projects pr where pr.id = point_attribute_projects.project_id and (pr.owner_id = auth.uid() or is_admin(auth.uid())))
+) with check (
+  exists (select 1 from projects pr where pr.id = point_attribute_projects.project_id and (pr.owner_id = auth.uid() or is_admin(auth.uid())))
+);
+
+-- point_attribute_values -- the actual entered data -- owner/admin only, no
+-- installer access at all.
 drop policy if exists "anon full access" on point_attribute_values;
-create policy "anon full access" on point_attribute_values for all using (true) with check (true);
+drop policy if exists "owner or admin only" on point_attribute_values;
+create policy "owner or admin only" on point_attribute_values for all using (
+  exists (
+    select 1 from points p join equipment e on e.id = p.equipment_id join projects pr on pr.id = e.project_id
+    where p.id = point_attribute_values.point_id and (pr.owner_id = auth.uid() or is_admin(auth.uid()))
+  )
+) with check (
+  exists (
+    select 1 from points p join equipment e on e.id = p.equipment_id join projects pr on pr.id = e.project_id
+    where p.id = point_attribute_values.point_id and (pr.owner_id = auth.uid() or is_admin(auth.uid()))
+  )
+);
 
-grant execute on function import_points(uuid, jsonb, jsonb) to anon, authenticated;
-grant execute on function bulk_set_points(jsonb) to anon, authenticated;
-grant execute on function bulk_set_install_checks(jsonb) to anon, authenticated;
-grant execute on function pair_reimported_point(uuid, uuid) to anon, authenticated;
-grant execute on function set_controller_status(jsonb) to anon, authenticated;
-grant execute on function bulk_set_point_attribute_values(jsonb) to anon, authenticated;
-grant execute on function set_point_attribute_projects(uuid, uuid[]) to anon, authenticated;
+-- admin_users -- a user can only ever see their own row (never the full
+-- admin list), which is exactly enough for is_admin() to resolve correctly
+-- for every caller (see that function's own comment). No one self-promotes
+-- via the app: adding an admin is a by-hand SQL Editor insert, which runs
+-- as the Postgres superuser and bypasses this policy entirely.
+drop policy if exists "see own row only" on admin_users;
+create policy "see own row only" on admin_users for select using (user_id = auth.uid());
+
+-- project_installers -- an installer sees their own invite rows (so
+-- is_installer_on() resolves for them); a project's owner (or an admin)
+-- sees every invite for their own project(s), and is the only one who can
+-- create or revoke one. No update policy: user_id is filled in by
+-- activate_pending_installer_invites() above, which runs in the elevated
+-- context of a GoTrue sign-up, not a normal authenticated-role request.
+drop policy if exists "self, or owner/admin of the project" on project_installers;
+create policy "self, or owner/admin of the project" on project_installers for select using (
+  user_id = auth.uid()
+  or is_admin(auth.uid())
+  or exists (select 1 from projects pr where pr.id = project_installers.project_id and pr.owner_id = auth.uid())
+);
+drop policy if exists "owner or admin invites" on project_installers;
+create policy "owner or admin invites" on project_installers for insert with check (
+  is_admin(auth.uid())
+  or exists (select 1 from projects pr where pr.id = project_installers.project_id and pr.owner_id = auth.uid())
+);
+drop policy if exists "owner or admin revokes" on project_installers;
+create policy "owner or admin revokes" on project_installers for delete using (
+  is_admin(auth.uid())
+  or exists (select 1 from projects pr where pr.id = project_installers.project_id and pr.owner_id = auth.uid())
+);
+
+-- anon is deliberately left off every grant below now that there's a real
+-- login -- these are only ever called by a signed-in user.
+grant execute on function import_points(uuid, jsonb, jsonb) to authenticated;
+grant execute on function bulk_set_points(jsonb) to authenticated;
+grant execute on function bulk_set_install_checks(jsonb) to authenticated;
+grant execute on function pair_reimported_point(uuid, uuid) to authenticated;
+grant execute on function set_controller_status(jsonb) to authenticated;
+grant execute on function bulk_set_point_attribute_values(jsonb) to authenticated;
+grant execute on function set_point_attribute_projects(uuid, uuid[]) to authenticated;
+grant execute on function installer_update_point(uuid, text, text) to authenticated;
+grant execute on function is_admin(uuid) to authenticated;
+grant execute on function is_installer_on(uuid) to authenticated;
+
+-- Existing-data migration for a database that had projects before this
+-- change: run once, by hand, after you've logged in at least once (so your
+-- own auth.users row exists) --
+--   update projects set owner_id = '<your-auth-uid>' where owner_id is null;
+-- -- not automated here, since there's no way to guess who should own
+-- pre-existing data.

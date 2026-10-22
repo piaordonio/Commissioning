@@ -1,11 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
+import type { Session } from "@supabase/supabase-js";
 import { api } from "./api";
+import { supabase } from "./supabaseClient";
+import { AuthScreen } from "./components/AuthScreen";
 import { Modal } from "./components/Modal";
 import { ImportMdbModal } from "./components/ImportMdbModal";
 import { VerifyControllerModal } from "./components/VerifyControllerModal";
 import { PointsReport } from "./components/PointsReport";
 import { PointsView } from "./views/PointsView";
 import { PointsCardList } from "./views/PointsCardList";
+import { InstallerPointsView } from "./views/InstallerPointsView";
 import { ProjectDashboard } from "./views/ProjectDashboard";
 import { AttributesAdmin } from "./views/AttributesAdmin";
 import { IssuesModal } from "./components/IssuesModal";
@@ -28,9 +32,44 @@ import {
   PointAttributeProject,
   PointAttributeValue,
   Project,
+  ProjectInstaller,
 } from "./types";
 
 export default function App() {
+  // Resolved once on mount (getSession()) and kept current afterward
+  // (onAuthStateChange -- sign-in/out, a token refresh, or finishing an
+  // email confirmation in another tab all land here). authLoading covers
+  // only that first resolution, so a logged-out visitor sees the sign-in
+  // screen immediately rather than a "Loading…" flash.
+  const [session, setSession] = useState<Session | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const userId = session?.user.id ?? null;
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session);
+      setAuthLoading(false);
+    });
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, next) => {
+      setSession(next);
+    });
+    return () => listener.subscription.unsubscribe();
+  }, []);
+
+  // Checked once per login, same question RLS itself answers server-side
+  // for every query -- this is just the client's own copy of the answer,
+  // used to decide which shell to render for the currently selected project
+  // (see isInstallerOnly below), not to gate anything security-sensitive by
+  // itself.
+  const [isAdmin, setIsAdmin] = useState(false);
+  useEffect(() => {
+    if (!userId) {
+      setIsAdmin(false);
+      return;
+    }
+    api.isAdmin(userId).then(setIsAdmin).catch(() => setIsAdmin(false));
+  }, [userId]);
+
   const [projects, setProjects] = useState<Project[]>([]);
   const [equipment, setEquipment] = useState<Equipment[]>([]);
   const [points, setPoints] = useState<Point[]>([]);
@@ -45,6 +84,7 @@ export default function App() {
   const [pointAttributeOptions, setPointAttributeOptions] = useState<PointAttributeOption[]>([]);
   const [pointAttributeProjects, setPointAttributeProjects] = useState<PointAttributeProject[]>([]);
   const [pointAttributeValues, setPointAttributeValues] = useState<PointAttributeValue[]>([]);
+  const [projectInstallers, setProjectInstallers] = useState<ProjectInstaller[]>([]);
   const [showAttributesAdmin, setShowAttributesAdmin] = useState(false);
   const [projectId, setProjectId] = useState<string>("");
   const [loading, setLoading] = useState(true);
@@ -79,6 +119,7 @@ export default function App() {
       setInstallChecks([]);
       setIssues([]);
       setPointAttributeValues([]);
+      setProjectInstallers([]);
       return;
     }
     const [eq, pts] = await Promise.all([
@@ -88,14 +129,20 @@ export default function App() {
     setEquipment(eq);
     setPoints(pts);
     const pointIds = pts.map((p) => p.id);
-    const [checks, iss, attrValues] = await Promise.all([
+    const [checks, iss, attrValues, installers] = await Promise.all([
       api.listInstallChecks<InstallCheck>(pointIds),
       api.listIssues<Issue>(pointIds),
       api.listPointAttributeValues<PointAttributeValue>(pointIds),
+      // Only ever meaningfully populated for a project's owner/admin (RLS
+      // scopes it the same way) -- harmless, low-volume extra fetch for an
+      // installer viewing their own single invite row, not worth branching
+      // this call on isInstallerOnly to skip.
+      api.listProjectInstallers<ProjectInstaller>(id),
     ]);
     setInstallChecks(checks);
     setIssues(iss);
     setPointAttributeValues(attrValues);
+    setProjectInstallers(installers);
   };
 
   // Attribute *definitions* (unlike values) are global and rarely change
@@ -115,6 +162,7 @@ export default function App() {
   };
 
   useEffect(() => {
+    if (!userId) return;
     (async () => {
       try {
         const list = await refreshProjects();
@@ -127,7 +175,7 @@ export default function App() {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [userId]);
 
   const changeProject = async (id: string) => {
     setProjectId(id);
@@ -198,6 +246,32 @@ export default function App() {
   const updatePoint = (point: Point, patch: Partial<Point>) => {
     setPoints((list) => list.map((p) => (p.id === point.id ? { ...p, ...patch } : p)));
     api.update<Point>("points", point.id, patch).catch(() => refreshAll());
+  };
+
+  // The installer-facing counterpart to updatePoint() above -- RLS has no
+  // UPDATE policy for an installer on `points` at all (see
+  // installer_update_point() in supabase/schema.sql for why), so this goes
+  // through that RPC instead of the plain api.update() the owner path uses.
+  const installerUpdatePointNotes = (point: Point, patch: { notes?: string; blocked_by?: string }) => {
+    const nextNotes = patch.notes ?? point.notes;
+    const nextBlockedBy = patch.blocked_by ?? point.blocked_by;
+    setPoints((list) =>
+      list.map((p) => (p.id === point.id ? { ...p, notes: nextNotes, blocked_by: nextBlockedBy } : p))
+    );
+    api.installerUpdatePoint(point.id, nextNotes, nextBlockedBy).catch(() => refreshAll());
+  };
+
+  // ProjectDashboard's Add Installer panel -- not optimistic (unlike most
+  // setters above), since a failed invite (bad email, already invited) needs
+  // to surface in that form rather than silently appear to have worked.
+  const inviteInstaller = async (email: string): Promise<void> => {
+    const created = await api.inviteInstaller<ProjectInstaller>(projectId, email);
+    setProjectInstallers((list) => [...list, created]);
+  };
+
+  const revokeInstaller = (email: string) => {
+    setProjectInstallers((list) => list.filter((pi) => pi.email !== email));
+    api.revokeInstaller(projectId, email).catch(() => refreshAll());
   };
 
   const setInstallValue = (pointId: string, field: InstallField, value: CheckState) => {
@@ -399,6 +473,11 @@ export default function App() {
   );
   const currentProject = projects.find((p) => p.id === projectId);
   const isNarrowViewport = useIsNarrowViewport(480);
+  // Projects only ever appear in `projects` at all because RLS already let
+  // this user see them (owner, admin, or an installer invite) -- so if
+  // they're not this project's owner and not an admin, the only way they're
+  // seeing it is via project_installers, and they get the restricted shell.
+  const isInstallerOnly = !!currentProject && currentProject.owner_id !== userId && !isAdmin;
 
   const deleteProject = async () => {
     if (!projectId) return;
@@ -417,6 +496,8 @@ export default function App() {
     }
   };
 
+  if (authLoading) return <div className="loading-screen">Loading…</div>;
+  if (!session) return <AuthScreen />;
   if (loading) return <div className="loading-screen">Loading…</div>;
 
   return (
@@ -443,16 +524,25 @@ export default function App() {
             unlike the desk-bound actions below -- this is a frequently-
             consulted read view, the same tier as switching to the card
             list, not a rare action worth hiding behind "Actions ▾". */}
-        <button
-          type="button"
-          className="btn-secondary"
-          disabled={!projectId}
-          onClick={() => setShowDashboard(true)}
-        >
-          Dashboard
-        </button>
+        {/* Dashboard, Print, Import, and every admin action below are a
+            tech/owner's tools -- an installer only ever gets the restricted
+            points view (see isInstallerOnly and InstallerPointsView.tsx),
+            so none of this applies to them. */}
+        {!isInstallerOnly && (
+          <button
+            type="button"
+            className="btn-secondary"
+            disabled={!projectId}
+            onClick={() => setShowDashboard(true)}
+          >
+            Dashboard
+          </button>
+        )}
         <div className="spacer" />
-        {isNarrowViewport && (
+        <button type="button" className="btn-secondary" onClick={() => supabase.auth.signOut()}>
+          Sign Out
+        </button>
+        {!isInstallerOnly && isNarrowViewport && (
           <button
             type="button"
             className="btn-secondary mobile-actions-toggle"
@@ -461,37 +551,49 @@ export default function App() {
             {showActions ? "Hide Actions ▲" : "Actions ▾"}
           </button>
         )}
-        <div className={`app-actions-group ${isNarrowViewport && !showActions ? "app-actions-group-collapsed" : ""}`}>
-          <button className="btn-danger" disabled={!projectId} onClick={() => setConfirmingDelete(true)}>
-            Delete Project
-          </button>
-          <button className="btn-secondary" disabled={!projectId} onClick={() => setVerifying(true)}>
-            Check Against Controller
-          </button>
-          <button
-            className="btn-secondary"
-            disabled={!projectId || points.length === 0}
-            onClick={() => setPrinting(true)}
-          >
-            Print Report
-          </button>
-          <button className="btn-primary" onClick={() => setImporting(true)}>
-            Import Access Database
-          </button>
-          {/* Not disabled when no project is selected, unlike every other
-              button in this group -- attribute definitions are global, not
-              tied to a project the way Delete Project/Check Against
-              Controller/Print Report are. */}
-          <button className="btn-secondary" onClick={() => setShowAttributesAdmin(true)}>
-            Manage Attributes
-          </button>
-        </div>
+        {!isInstallerOnly && (
+          <div className={`app-actions-group ${isNarrowViewport && !showActions ? "app-actions-group-collapsed" : ""}`}>
+            <button className="btn-danger" disabled={!projectId} onClick={() => setConfirmingDelete(true)}>
+              Delete Project
+            </button>
+            <button className="btn-secondary" disabled={!projectId} onClick={() => setVerifying(true)}>
+              Check Against Controller
+            </button>
+            <button
+              className="btn-secondary"
+              disabled={!projectId || points.length === 0}
+              onClick={() => setPrinting(true)}
+            >
+              Print Report
+            </button>
+            <button className="btn-primary" onClick={() => setImporting(true)}>
+              Import Access Database
+            </button>
+            {/* Not disabled when no project is selected, unlike every other
+                button in this group -- attribute definitions are global, not
+                tied to a project the way Delete Project/Check Against
+                Controller/Print Report are. */}
+            <button className="btn-secondary" onClick={() => setShowAttributesAdmin(true)}>
+              Manage Attributes
+            </button>
+          </div>
+        )}
       </div>
 
       {error && <div className="error-banner no-print">{error}</div>}
 
       <div className="app-main">
-        {showAttributesAdmin ? (
+        {isInstallerOnly ? (
+          <InstallerPointsView
+            points={points}
+            equipment={equipment}
+            installChecks={installChecks}
+            issues={issues}
+            onSetInstallValue={setInstallValue}
+            onUpdatePointNotes={installerUpdatePointNotes}
+            onOpenIssues={(point) => setIssuesModalPointId(point.id)}
+          />
+        ) : showAttributesAdmin ? (
           <AttributesAdmin
             pointAttributes={pointAttributes}
             pointAttributeOptions={pointAttributeOptions}
@@ -532,8 +634,11 @@ export default function App() {
             pointAttributes={pointAttributes}
             pointAttributeProjects={pointAttributeProjects}
             pointAttributeValues={pointAttributeValues}
+            projectInstallers={projectInstallers}
             onSetIssueStatus={setIssueStatus}
             onOpenIssues={(point) => setIssuesModalPointId(point.id)}
+            onInviteInstaller={inviteInstaller}
+            onRevokeInstaller={revokeInstaller}
             onBack={() => setShowDashboard(false)}
           />
         ) : isNarrowViewport ? (

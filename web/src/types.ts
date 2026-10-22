@@ -75,8 +75,24 @@ export interface Project {
   id: string;
   project_number: string;
   name: string;
+  // Stamped from the request's JWT at insert time (see schema.sql) -- the
+  // client never sets this directly, only ever compares it to the current
+  // session's user id to decide owner vs. installer access (see App.tsx).
+  owner_id: string | null;
   created_at: string;
   updated_at: string;
+}
+
+// A project's invited field installers -- see project_installers in
+// supabase/schema.sql. user_id is null for a pending invite (that email
+// hasn't signed up yet); activate_pending_installer_invites() fills it in
+// the moment they do.
+export interface ProjectInstaller {
+  project_id: string;
+  email: string;
+  user_id: string | null;
+  invited_by: string | null;
+  created_at: string;
 }
 
 export interface Equipment {

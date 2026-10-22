@@ -649,30 +649,74 @@ npm run build   # production build, output in web/dist
 ### One-time setup
 
 1. **Create a Supabase project** at [supabase.com](https://supabase.com) (free tier is plenty for this).
-2. **Run the schema**: Dashboard → SQL Editor → New query → paste the contents of
-   [`supabase/schema.sql`](supabase/schema.sql) → Run. Creates the three tables
-   (`projects`, `equipment`, `points`), the two RPC functions used for
-   atomic bulk operations, and RLS policies (see below).
-3. **Get your API credentials**: Dashboard → Settings → API → copy the
+2. **Confirm Email auth is enabled**: Dashboard → Authentication → Providers
+   → Email (on by default for a new project). No app registration, no
+   external IT step — this app uses plain email/password, not an OAuth
+   provider (see "Accounts, ownership, and field installers" below for why).
+3. **Run the schema**: Dashboard → SQL Editor → New query → paste the
+   contents of [`supabase/schema.sql`](supabase/schema.sql) → Run. Creates
+   every table this app uses (`projects`, `equipment`, `points`, and the
+   rest), the RPC functions used for atomic bulk operations, and RLS
+   policies (see below). Safe to re-run against an existing project — every
+   statement is idempotent.
+4. **Get your API credentials**: Dashboard → Settings → API → copy the
    **Project URL** and the **anon public** key.
-4. **Local dev**: `cp web/.env.example web/.env.local` and fill in those two
+5. **Local dev**: `cp web/.env.example web/.env.local` and fill in those two
    values.
-5. **Deploy to Vercel**: connect this GitHub repo in the Vercel dashboard
+6. **Deploy to Vercel**: connect this GitHub repo in the Vercel dashboard
    (Root Directory: `web`), and add the same two values under Project
    Settings → Environment Variables as `VITE_SUPABASE_URL` and
    `VITE_SUPABASE_ANON_KEY`. Every push to the default branch redeploys
    automatically — no build step runs on your machine, so the corporate-
    network TLS/cert issues that came up building the (now-removed) desktop
    version don't apply here.
+7. **Sign up, then claim your existing projects**: open the deployed app,
+   create your account from the sign-in screen, then run
+   `update projects set owner_id = '<your-auth-uid>' where owner_id is null;`
+   once in the SQL Editor (find your uid under Authentication → Users) —
+   only needed if you had projects in this database from before accounts
+   existed; a fresh project owns itself automatically going forward (see
+   below).
 
-### Why RLS is wide open right now
+### Accounts, ownership, and field installers
 
-`supabase/schema.sql` enables Row Level Security on all three tables but
-with permissive "anyone can do anything" policies, not locked-down ones —
-there's no user-account system in this app yet, and the anon key ships in
-the client bundle regardless (it's public by design in Supabase's model).
-If this tool grows real user accounts, tightening these policies (e.g.
-scoping by project membership) is the first thing to do before that matters.
+Every table has Row Level Security enabled, and every policy requires a
+real login (`auth.uid() is not null`) one way or another — the anon key
+still ships in the client bundle (public by design in Supabase's model), it
+just no longer unlocks anything on its own. Three kinds of access from
+there:
+
+- **A project's owner** — whoever's logged-in account created it
+  (`projects.owner_id`, stamped from the request's JWT automatically,
+  `default auth.uid()`) — has full read/write on that project and
+  everything under it. Nothing else about the app changes for an owner;
+  this is the same experience it's always had, just scoped to your own
+  projects instead of shared with anyone holding the anon key.
+- **An admin** (a row in `admin_users`, added with a one-line SQL Editor
+  insert — `insert into admin_users (user_id) values ('<their-auth-uid>');`
+  — no redeploy needed) sees and edits every project, not just their own.
+  There's no UI for granting this; it's meant for the rare supervisor
+  account, not something to hand out casually.
+- **A field installer** sees only the specific project(s) they're invited
+  to (`project_installers`, managed from the "Installers" panel on each
+  project's Dashboard — invite by email, revoke anytime), and only gets a
+  restricted shell (`InstallerPointsView.tsx`): the 7 Install fields,
+  Notes, Blocked By, and the Issues log. No Commissioning checklist, no
+  custom attributes, no project-admin actions (Delete/Reset/Import/Check
+  Against Controller) — enforced by RLS and a handful of explicit checks
+  added to the write RPCs that don't have row-level granularity to lean on
+  (see `installer_update_point()` and the guards on `import_points()`/
+  `bulk_set_points()`/`pair_reimported_point()`/`set_controller_status()`
+  in `supabase/schema.sql`), not just by the UI omitting a button.
+  Inviting someone by email works before they've ever signed up — the
+  invite sits pending (`project_installers.user_id` null) until that exact
+  email creates an account, at which point a trigger on `auth.users`
+  activates it automatically. That's also why sign-up is left open to
+  anyone rather than gated behind an invite code: an unsolicited sign-up
+  just gets an account with nothing assigned to it, inert until an owner
+  has already invited that email somewhere — which avoids this app needing
+  its first privileged server-side component (an Edge Function with a
+  service-role key) just to create accounts.
 
 ### Why five operations are Postgres functions, not plain inserts/updates
 

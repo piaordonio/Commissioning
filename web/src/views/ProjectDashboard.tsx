@@ -9,6 +9,7 @@ import {
   PointAttributeProject,
   PointAttributeValue,
   POINT_STATUS_LABELS,
+  ProjectInstaller,
 } from "../types";
 import { averageProgress, buildProgressByEquipment } from "../progress";
 import { averageInstallProgress, buildInstallProgressByEquipment } from "../installProgress";
@@ -31,8 +32,11 @@ export function ProjectDashboard({
   pointAttributes,
   pointAttributeProjects,
   pointAttributeValues,
+  projectInstallers,
   onSetIssueStatus,
   onOpenIssues,
+  onInviteInstaller,
+  onRevokeInstaller,
   onBack,
 }: {
   projectId: string;
@@ -43,10 +47,36 @@ export function ProjectDashboard({
   pointAttributes: PointAttribute[];
   pointAttributeProjects: PointAttributeProject[];
   pointAttributeValues: PointAttributeValue[];
+  projectInstallers: ProjectInstaller[];
   onSetIssueStatus: (issueId: string, status: IssueStatus) => void;
   onOpenIssues: (point: Point) => void;
+  onInviteInstaller: (email: string) => Promise<void>;
+  onRevokeInstaller: (email: string) => void;
   onBack: () => void;
 }) {
+  // Collapsed by default -- same reasoning as every other rarely-needed
+  // toolbar section in this app (Actions ▾, Filters ▾): inviting an
+  // installer is a once-in-a-while admin action, not something that should
+  // eat vertical space above the project rollup every time you open it.
+  const [showInstallers, setShowInstallers] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviting, setInviting] = useState(false);
+  const [inviteError, setInviteError] = useState<string | null>(null);
+
+  const handleInvite = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inviteEmail.trim()) return;
+    setInviting(true);
+    setInviteError(null);
+    try {
+      await onInviteInstaller(inviteEmail.trim());
+      setInviteEmail("");
+    } catch (err: any) {
+      setInviteError(err.message ?? "Failed to invite installer");
+    } finally {
+      setInviting(false);
+    }
+  };
   // Independent per-equipment expand, same Set-based pattern PointsCardList.tsx
   // already uses for its per-point cards.
   const [expandedEquipmentIds, setExpandedEquipmentIds] = useState<Set<string>>(new Set());
@@ -210,7 +240,61 @@ export function ProjectDashboard({
           ← Back to Points
         </button>
         <div className="spacer" />
+        <button type="button" className="btn-secondary" onClick={() => setShowInstallers((v) => !v)}>
+          {showInstallers ? "Hide Installers ▲" : `Installers (${projectInstallers.length}) ▾`}
+        </button>
       </div>
+
+      {showInstallers && (
+        <div className="dashboard-installers">
+          <form className="form-row" style={{ display: "flex", gap: 8 }} onSubmit={handleInvite}>
+            <input
+              type="email"
+              placeholder="installer@example.com"
+              value={inviteEmail}
+              onChange={(e) => setInviteEmail(e.target.value)}
+              style={{ flex: 1 }}
+            />
+            <button type="submit" className="btn-primary" disabled={inviting}>
+              {inviting ? "Inviting…" : "Invite"}
+            </button>
+          </form>
+          {inviteError && <div className="error-banner">{inviteError}</div>}
+          {projectInstallers.length === 0 ? (
+            <div className="muted-text">No installers invited to this project yet.</div>
+          ) : (
+            <div className="table-wrap">
+              <table className="data-table">
+                <tbody>
+                  {projectInstallers.map((pi) => (
+                    <tr key={pi.email}>
+                      <td>{pi.email}</td>
+                      <td>
+                        <span className={`status-pill ${pi.user_id ? "status-commissioned" : "status-not_started"}`}>
+                          {pi.user_id ? "Active" : "Pending"}
+                        </span>
+                      </td>
+                      <td>
+                        <button
+                          type="button"
+                          className="icon-btn"
+                          title="Revoke access"
+                          aria-label="Revoke access"
+                          onClick={() => {
+                            if (window.confirm(`Remove ${pi.email}'s access to this project?`)) onRevokeInstaller(pi.email);
+                          }}
+                        >
+                          🗑
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="dashboard-summary">
         <span className="toolbar-label">
