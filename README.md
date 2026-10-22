@@ -471,10 +471,15 @@ wrong guess that silently loses progress. Instead, whenever a re-import
 removes at least one point, a reconciliation screen (`web/src/components/
 ImportReconciliation.tsx`) shows the just-removed and just-added points
 side by side; clicking a removed one then its replacement calls
-`pair_reimported_point()`, which transfers the checklist state onto the new
-point_number and removes the now-redundant old row. Skippable — closing the
-screen without pairing anything is exactly the "point was actually removed"
-case, already handled correctly by default.
+`pair_reimported_point()`, which transfers the checklist state, Install
+checklist, logged issues, and custom attribute values onto the new
+point_number and removes the now-redundant old row. (Issues are re-pointed
+wholesale rather than copied field by field, since a point can have zero or
+many; an attribute value is only carried over if the new point doesn't
+already have its own value for that attribute, so nothing already entered
+on the new row gets clobbered.) Skippable — closing the screen without
+pairing anything is exactly the "point was actually removed" case, already
+handled correctly by default.
 
 ## Checking design points against the controller
 
