@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import {
   Equipment,
+  INSTALL_FIELDS,
+  INSTALL_FIELD_LABELS,
   InstallCheck,
   Issue,
   IssueStatus,
@@ -12,7 +14,7 @@ import {
   ProjectInstaller,
 } from "../types";
 import { averageProgress, buildProgressByEquipment } from "../progress";
-import { averageInstallProgress, buildInstallProgressByEquipment } from "../installProgress";
+import { averageInstallProgress, buildInstallProgressByEquipment, installFieldPercent } from "../installProgress";
 import { buildActiveIssueRows, buildOpenIssueCountByEquipment, groupIssuesByPointId, openIssueCount } from "../issues";
 import { attributesForProject, buildAttributeValueMap } from "../pointAttributes";
 import { PointGroup, usePointRows } from "../usePointRows";
@@ -111,6 +113,13 @@ export function ProjectDashboard({
 
   const overallPct = Math.round(averageProgress(activePoints, projectAttrs, attrValueMap) * 100);
   const overallInstallPct = Math.round(averageInstallProgress(activePoints, installChecksByPointId) * 100);
+  // One tile per Install field -- which specific activity (piping vs. end-
+  // to-end checkout, say) is actually lagging, not just the blended
+  // overallInstallPct average above.
+  const installFieldPercents = useMemo(
+    () => INSTALL_FIELDS.map((field) => ({ field, pct: installFieldPercent(activePoints, installChecksByPointId, field) })),
+    [activePoints, installChecksByPointId]
+  );
   const progressByEquipment = useMemo(
     () => buildProgressByEquipment(activePoints, projectAttrs, attrValueMap),
     [activePoints, projectAttrs, attrValueMap]
@@ -309,6 +318,28 @@ export function ProjectDashboard({
           </span>
         )}
       </div>
+
+      {groups.length > 0 && (
+        <div className="install-field-tiles-section">
+          <div className="section-label">Install Progress by Activity</div>
+          <div className="install-field-tiles">
+            {installFieldPercents.map(({ field, pct }) => (
+              <div key={field} className="install-field-tile">
+                <div className="install-field-tile-label">{INSTALL_FIELD_LABELS[field]}</div>
+                <div className={`install-field-tile-pct ${pct > 90 ? "progress-pill-high" : pct < 10 ? "progress-pill-low" : ""}`}>
+                  {pct}%
+                </div>
+                <div className="install-field-tile-track">
+                  <div
+                    className={`install-field-tile-fill ${pct > 90 ? "install-field-tile-fill-high" : pct < 10 ? "install-field-tile-fill-low" : ""}`}
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {groups.length === 0 ? (
         <div className="empty-state">No points yet.</div>

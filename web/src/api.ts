@@ -221,6 +221,29 @@ export const api = {
     if (error) throw new Error(error.message);
   },
 
+  // "Same access as me" invites -- see pending_admins/activate_pending_admin_invites()
+  // in supabase/schema.sql. RLS restricts all three of these to an existing
+  // admin already (see that table's own policy), so there's no separate
+  // owner-vs-admin branching needed here the way project_installers has.
+  listPendingAdmins: async <T>(): Promise<T[]> => {
+    const { data, error } = await supabase.from("pending_admins").select("*");
+    return assertNoError(data as T[] | null, error);
+  },
+
+  inviteAdmin: async <T>(email: string): Promise<T> => {
+    const { data, error } = await supabase
+      .from("pending_admins")
+      .insert({ email: email.trim().toLowerCase() })
+      .select()
+      .single();
+    return assertNoError(data as T | null, error);
+  },
+
+  revokeAdminInvite: async (email: string): Promise<void> => {
+    const { error } = await supabase.from("pending_admins").delete().eq("email", email);
+    if (error) throw new Error(error.message);
+  },
+
   // Also one transaction server-side (import_points in supabase/schema.sql):
   // either every equipment/point row from the parsed import lands, or none
   // do. Non-destructive: matches existing equipment (by tag) and points (by

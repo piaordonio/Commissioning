@@ -343,6 +343,37 @@ begin
 end;
 $$;
 
+-- A rare, lightweight "same access as me" grant -- same pending-invite-by-
+-- email shape as project_installers above, but for the one cross-cutting
+-- admin_users override instead of a per-project assignment. Deliberately a
+-- narrower circle than installer invites: only an existing admin can invite
+-- another one (see this table's own RLS below), not any project owner --
+-- handing out full-account access shouldn't be as easy as handing out
+-- access to one project.
+create table if not exists pending_admins (
+  email text primary key,
+  invited_by uuid references auth.users(id) default auth.uid(),
+  created_at timestamptz not null default now()
+);
+
+create or replace function activate_pending_admin_invites()
+returns trigger
+language plpgsql
+as $$
+begin
+  if exists (select 1 from pending_admins where email = new.email) then
+    insert into admin_users (user_id) values (new.id) on conflict do nothing;
+    delete from pending_admins where email = new.email;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_activate_admin_invites on auth.users;
+create trigger trg_activate_admin_invites
+  after insert on auth.users
+  for each row execute function activate_pending_admin_invites();
+
 -- ---- Keep updated_at current on every UPDATE, regardless of caller ----
 
 create or replace function set_updated_at()
@@ -1048,6 +1079,7 @@ alter table point_attribute_options enable row level security;
 alter table point_attribute_values enable row level security;
 alter table admin_users enable row level security;
 alter table project_installers enable row level security;
+alter table pending_admins enable row level security;
 
 -- projects
 drop policy if exists "anon full access" on projects;
@@ -1235,6 +1267,13 @@ create policy "owner or admin revokes" on project_installers for delete using (
   is_admin(auth.uid())
   or exists (select 1 from projects pr where pr.id = project_installers.project_id and pr.owner_id = auth.uid())
 );
+
+-- pending_admins -- only an existing admin can see, create, or revoke a
+-- pending "same access as me" invite. Narrower than project_installers'
+-- owner-can-invite-to-their-own-project model on purpose (see this table's
+-- own comment above).
+drop policy if exists "admin only" on pending_admins;
+create policy "admin only" on pending_admins for all using (is_admin(auth.uid())) with check (is_admin(auth.uid()));
 
 -- anon is deliberately left off every grant below now that there's a real
 -- login -- these are only ever called by a signed-in user.

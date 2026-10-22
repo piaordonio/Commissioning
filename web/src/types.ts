@@ -95,6 +95,17 @@ export interface ProjectInstaller {
   created_at: string;
 }
 
+// A pending "same access as me" invite -- see pending_admins in
+// supabase/schema.sql. Unlike ProjectInstaller, there's no user_id column
+// here: the row is deleted outright the moment that email signs up (its
+// job is done -- admin_users is the lasting record from then on), so a row
+// existing at all means "still pending."
+export interface PendingAdmin {
+  email: string;
+  invited_by: string | null;
+  created_at: string;
+}
+
 export interface Equipment {
   id: string;
   project_id: string;

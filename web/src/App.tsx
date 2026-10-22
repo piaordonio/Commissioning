@@ -4,6 +4,7 @@ import { api } from "./api";
 import { supabase } from "./supabaseClient";
 import { AuthScreen } from "./components/AuthScreen";
 import { Modal } from "./components/Modal";
+import { ManageAdminsModal } from "./components/ManageAdminsModal";
 import { ImportMdbModal } from "./components/ImportMdbModal";
 import { VerifyControllerModal } from "./components/VerifyControllerModal";
 import { PointsReport } from "./components/PointsReport";
@@ -31,6 +32,7 @@ import {
   PointAttributeOption,
   PointAttributeProject,
   PointAttributeValue,
+  PendingAdmin,
   Project,
   ProjectInstaller,
 } from "./types";
@@ -69,6 +71,31 @@ export default function App() {
     }
     api.isAdmin(userId).then(setIsAdmin).catch(() => setIsAdmin(false));
   }, [userId]);
+
+  // "Manage Project Managers" -- account-wide, not per-project, so fetched
+  // once whenever the current user becomes an admin rather than riding
+  // refreshProjectData's per-project cycle the way projectInstallers does.
+  // RLS already returns nothing for a non-admin, but there's no reason to
+  // even ask.
+  const [pendingAdmins, setPendingAdmins] = useState<PendingAdmin[]>([]);
+  const [showManageAdmins, setShowManageAdmins] = useState(false);
+  useEffect(() => {
+    if (!isAdmin) {
+      setPendingAdmins([]);
+      return;
+    }
+    api.listPendingAdmins<PendingAdmin>().then(setPendingAdmins).catch(() => {});
+  }, [isAdmin]);
+
+  const inviteAdmin = async (email: string): Promise<void> => {
+    const created = await api.inviteAdmin<PendingAdmin>(email);
+    setPendingAdmins((list) => [...list, created]);
+  };
+
+  const revokeAdminInvite = (email: string) => {
+    setPendingAdmins((list) => list.filter((p) => p.email !== email));
+    api.revokeAdminInvite(email).catch(() => {});
+  };
 
   const [projects, setProjects] = useState<Project[]>([]);
   const [equipment, setEquipment] = useState<Equipment[]>([]);
@@ -539,6 +566,15 @@ export default function App() {
           </button>
         )}
         <div className="spacer" />
+        {/* Account-wide, not tied to the currently selected project -- only
+            an existing admin ever sees this (RLS already enforces it
+            server-side; this is just not showing a door that'd reject
+            anyone else who clicked it). */}
+        {isAdmin && (
+          <button type="button" className="btn-secondary" onClick={() => setShowManageAdmins(true)}>
+            Manage Project Managers
+          </button>
+        )}
         <button type="button" className="btn-secondary" onClick={() => supabase.auth.signOut()}>
           Sign Out
         </button>
@@ -682,6 +718,12 @@ export default function App() {
           />
         )}
       </div>
+
+      {showManageAdmins && (
+        <Modal title="Manage Project Managers" onClose={() => setShowManageAdmins(false)}>
+          <ManageAdminsModal pendingAdmins={pendingAdmins} onInvite={inviteAdmin} onRevoke={revokeAdminInvite} />
+        </Modal>
+      )}
 
       {confirmingDelete && currentProject && (
         <Modal title="Delete Project" onClose={() => setConfirmingDelete(false)}>

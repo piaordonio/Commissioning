@@ -318,6 +318,19 @@ stand out. This is scoped to the Dashboard (`.dashboard-view` in
 same classes render inside the Issues modal too, which keeps its normal
 text color there.
 
+An **Install Progress by Activity** tile row sits between the summary line
+and the Not Commissioned/Commissioned columns: one tile per Install field
+(Pipe/Flex, Pulled, Mounted, Panel Term., Field Term., Tagged, End-to-End),
+each showing what percentage of active points have that one field checked
+(`installFieldPercent()` in `web/src/installProgress.ts`) — the overall
+Install % pill already in the summary line blends all 7 into one weighted
+number, which can't tell you *which* activity is actually lagging the way
+seeing "End-to-End: 8%" next to "Pipe/Flex: 92%" does. Same N/A-excluded-
+from-the-denominator convention the overall percentage already uses (a
+point marked N/A for a field doesn't drag that field's number down, and a
+field that's N/A everywhere reads 100%, not 0%), just computed per field
+instead of blended across all seven.
+
 ### Staying fresh across a shared shift
 
 There's no realtime sync between browser tabs — this is deliberately a
@@ -692,11 +705,19 @@ there:
   everything under it. Nothing else about the app changes for an owner;
   this is the same experience it's always had, just scoped to your own
   projects instead of shared with anyone holding the anon key.
-- **An admin** (a row in `admin_users`, added with a one-line SQL Editor
-  insert — `insert into admin_users (user_id) values ('<their-auth-uid>');`
-  — no redeploy needed) sees and edits every project, not just their own.
-  There's no UI for granting this; it's meant for the rare supervisor
-  account, not something to hand out casually.
+- **An admin** (a row in `admin_users`) sees and edits every project, not
+  just their own — "the same access as you" for a project manager, not
+  scoped to one project the way a field installer invite is. The very
+  first admin has to be bootstrapped by hand in the SQL Editor —
+  `insert into admin_users (user_id) values ('<your-auth-uid>');` — but
+  from then on, that admin can invite more from the header's "Manage
+  Project Managers" button: same pending-invite-by-email mechanism as
+  installers (`pending_admins`, activated by a trigger on `auth.users` the
+  moment that email signs up), just for the admin role instead of a
+  project assignment. Deliberately a narrower circle than installer
+  invites — only an existing admin can grant this, not any project owner,
+  since it hands out full-account access rather than access to one
+  project.
 - **A field installer** sees only the specific project(s) they're invited
   to (`project_installers`, managed from the "Installers" panel on each
   project's Dashboard — invite by email, revoke anytime), and only gets a

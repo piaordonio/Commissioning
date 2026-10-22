@@ -1,4 +1,4 @@
-import { CheckState, INSTALL_FIELDS, INSTALL_FIELD_WEIGHTS, InstallCheck, Point } from "./types";
+import { CheckState, INSTALL_FIELDS, INSTALL_FIELD_WEIGHTS, InstallCheck, InstallField, Point } from "./types";
 
 /** Credit each state earns toward "done"; null excludes the field's weight from the average (N/A). */
 const CREDIT: Record<CheckState, number | null> = {
@@ -57,6 +57,33 @@ export function installStatus(check: InstallCheck | undefined): InstallStatus {
 export function averageInstallProgress(points: Point[], checksByPointId: Map<string, InstallCheck>): number {
   if (points.length === 0) return 0;
   return points.reduce((sum, p) => sum + installProgress(checksByPointId.get(p.id)), 0) / points.length;
+}
+
+// Percentage (0-100) of active points where this ONE Install field is
+// checked, among points where it isn't marked N/A -- same per-field
+// exclude-N/A-from-the-denominator convention installProgress() already
+// uses across all 7 fields at once, just restricted to a single field for
+// the Dashboard's "Install Progress by Activity" breakdown (one tile per
+// field, so a manager can see which specific activity -- piping vs. end-to-
+// end checkout, say -- is actually lagging, not just the blended average).
+export function installFieldPercent(
+  points: Point[],
+  checksByPointId: Map<string, InstallCheck>,
+  field: InstallField
+): number {
+  let checked = 0;
+  let counted = 0;
+  for (const p of points) {
+    const check = checksByPointId.get(p.id);
+    const value = check ? check[field] : "";
+    if (value === "na") continue;
+    counted++;
+    if (value === "check") checked++;
+  }
+  // Vacuously complete when every point is N/A for this field (or there are
+  // no points at all) -- same convention installProgress()'s weightSum===0
+  // case and installStatus()'s all-N/A case both already use.
+  return counted === 0 ? 100 : Math.round((checked / counted) * 100);
 }
 
 export function buildInstallProgressByEquipment(
