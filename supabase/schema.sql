@@ -657,10 +657,11 @@ $$;
 -- Reconciliation: the user recognized that "point_number" going inactive
 -- and "point_number" newly added in the same re-import are actually the
 -- same physical point, renumbered — not a removal + an unrelated addition.
--- Transfers checklist state/notes/blocked_by from the old point onto the
--- new one, then removes the now-redundant old row (its data has been
--- merged forward, so keeping it around would just clutter the "show
--- removed points" view with an already-resolved entry).
+-- Transfers checklist state/notes/blocked_by, install checks, issues, and
+-- custom attribute values from the old point onto the new one, then
+-- removes the now-redundant old row (its data has been merged forward, so
+-- keeping it around would just clutter the "show removed points" view
+-- with an already-resolved entry).
 create or replace function pair_reimported_point(p_old_point_id uuid, p_new_point_id uuid)
 returns void
 language plpgsql
@@ -696,8 +697,30 @@ begin
     where new_ic.point_id = p_new_point_id
       and old_ic.point_id = p_old_point_id;
 
-  -- Cascades to the old point's install_checks row too (point_id references
-  -- points(id) on delete cascade).
+  -- Issues have no one-row-per-point constraint (zero or many per point,
+  -- unlike install_checks), so there's nothing on the new point to merge
+  -- onto -- just re-point the existing rows wholesale. Keeps id, status,
+  -- created_at/closed_at, everything, unlike the field-by-field copies
+  -- above.
+  update issues set point_id = p_new_point_id where point_id = p_old_point_id;
+
+  -- point_attribute_values has no trigger-created row waiting on the new
+  -- point the way install_checks does, and the new point *can* already
+  -- have its own value for an attribute (entered before this pairing
+  -- happened) -- a blind re-point would hit that row's primary key
+  -- (point_id, point_attribute_id). Insert-and-skip-on-conflict instead:
+  -- carries over every old value the new point doesn't already have, and
+  -- leaves the new point's own value alone wherever one already exists.
+  insert into point_attribute_values (point_id, point_attribute_id, value, updated_at)
+    select p_new_point_id, point_attribute_id, value, updated_at
+    from point_attribute_values
+    where point_id = p_old_point_id
+    on conflict (point_id, point_attribute_id) do nothing;
+
+  -- Cascades to the old point's install_checks row, and any
+  -- point_attribute_values rows the insert above left behind because the
+  -- new point already had its own value for that attribute (issues were
+  -- already re-pointed above, so none remain to cascade away here).
   delete from points where id = p_old_point_id;
 end;
 $$;
