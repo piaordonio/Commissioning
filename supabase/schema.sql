@@ -302,12 +302,19 @@ $$;
 -- that's what lets "Add Installer" work without a privileged server
 -- component: an unsolicited sign-up just gets an account with nothing
 -- assigned to it yet, inert until an owner has already invited that exact
--- email to a project. Runs in the elevated context of a GoTrue sign-up
--- (not a normal `authenticated`-role request), so it isn't itself subject
--- to project_installers' own RLS policies below.
+-- email to a project. `security definer` is required here, not optional:
+-- GoTrue's own insert into auth.users runs as the supabase_auth_admin role,
+-- which has no grants on public.project_installers, so without
+-- `security definer` this trigger's UPDATE fails with a permission error
+-- and GoTrue aborts the entire sign-up ("Database error saving new user").
+-- `set search_path` pins which schema `project_installers` resolves against
+-- so that a definer-rights function can't be tricked by the caller's own
+-- search_path.
 create or replace function activate_pending_installer_invites()
 returns trigger
 language plpgsql
+security definer
+set search_path = public
 as $$
 begin
   update project_installers set user_id = new.id
@@ -363,9 +370,16 @@ create table if not exists pending_admins (
   created_at timestamptz not null default now()
 );
 
+-- Same reason as activate_pending_installer_invites() above: GoTrue's insert
+-- into auth.users runs as supabase_auth_admin, which has no grants on
+-- public.pending_admins/admin_users, so this needs `security definer` (plus
+-- a pinned search_path) or every sign-up fails with "Database error saving
+-- new user", not just invited ones.
 create or replace function activate_pending_admin_invites()
 returns trigger
 language plpgsql
+security definer
+set search_path = public
 as $$
 begin
   if exists (select 1 from pending_admins where email = new.email) then
