@@ -63,6 +63,30 @@ export const INSTALL_FIELD_WEIGHTS: Record<InstallField, number> = {
   end_to_end: 3,
 };
 
+// A prerequisite checklist that gates when point-level Install work (above)
+// can even start -- tracked once per physical piece of equipment (a supply
+// fan, a heating coil), not once per point or even once per equipment/
+// controller row: one controller commonly serves 2-3 separate physical
+// units, each needing its own Space Ready/Equipment Installed/Ducted-Piped
+// sign-off before a tech starts piping/pulling wire to its points. See
+// physical_equipment in supabase/schema.sql.
+export const PHYSICAL_EQUIPMENT_FIELDS = ["space_ready", "equipment_installed", "ducted_piped"] as const;
+export type PhysicalEquipmentField = (typeof PHYSICAL_EQUIPMENT_FIELDS)[number];
+
+export const PHYSICAL_EQUIPMENT_FIELD_LABELS: Record<PhysicalEquipmentField, string> = {
+  space_ready: "Space Ready",
+  equipment_installed: "Equipment Installed",
+  ducted_piped: "Ducted/Piped",
+};
+
+export type PhysicalEquipment = {
+  id: string;
+  equipment_id: string;
+  name: string;
+  created_at: string;
+  updated_at: string;
+} & Record<PhysicalEquipmentField, CheckState>;
+
 export type PointStatus = "not_started" | "in_progress" | "commissioned";
 
 export const POINT_STATUS_LABELS: Record<PointStatus, string> = {

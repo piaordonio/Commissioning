@@ -1126,6 +1126,80 @@ textarea {
   font-size: 16px;
 }
 
+/* The prerequisite checklist (Space Ready / Equipment Installed /
+   Ducted-Piped), shown once per physical equipment under a controller's
+   group header -- shared markup between PointsCardList.tsx's mobile
+   layout and PointsView.tsx's desktop table (where it sits inside its own
+   full-width row, .table-group-subheader below), so this block is written
+   to look reasonable in both rather than tuned to just one. */
+.physical-equipment-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 12px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+
+.physical-equipment-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.physical-equipment-name {
+  font-weight: 600;
+  font-size: 13px;
+  min-width: 120px;
+}
+
+.physical-equipment-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: white;
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.physical-equipment-cell-check {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+.physical-equipment-cell-x {
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+.physical-equipment-cell-na {
+  background: #f8fafc;
+}
+
+.physical-equipment-cell-value {
+  font-weight: 700;
+}
+
+.physical-equipment-add-row {
+  display: flex;
+  gap: 8px;
+}
+.physical-equipment-add-row input {
+  flex: 1;
+  min-width: 160px;
+}
+
+.table-group-subheader td {
+  background: var(--bg);
+  padding: 0;
+  border-bottom: 1px solid var(--border);
+}
+.table-group-subheader .physical-equipment-section {
+  border-bottom: none;
+}
+
 .mobile-text-field {
   display: flex;
   flex-direction: column;

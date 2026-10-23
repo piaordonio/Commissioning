@@ -10,6 +10,8 @@ import {
   InstallCheck,
   InstallField,
   Issue,
+  PhysicalEquipment,
+  PhysicalEquipmentField,
   Point,
   PointAttribute,
   PointAttributeOption,
@@ -18,6 +20,7 @@ import {
   POINT_STATUS_LABELS,
   PointStatus,
 } from "../types";
+import { PhysicalEquipmentChecklist } from "../components/PhysicalEquipmentChecklist";
 import { buildProgressByEquipment } from "../progress";
 import {
   buildInstallProgressByEquipment,
@@ -44,6 +47,7 @@ export function PointsCardList({
   projectId,
   points,
   equipment,
+  physicalEquipment,
   installChecks,
   issues,
   pointAttributes,
@@ -56,11 +60,15 @@ export function PointsCardList({
   onDeletePoint,
   onOpenIssues,
   onSetAttributeValue,
+  onSetPhysicalEquipmentCheck,
+  onCreatePhysicalEquipment,
+  onDeletePhysicalEquipment,
   installerView = false,
 }: {
   projectId: string;
   points: Point[];
   equipment: Equipment[];
+  physicalEquipment: PhysicalEquipment[];
   installChecks: InstallCheck[];
   issues: Issue[];
   pointAttributes: PointAttribute[];
@@ -73,6 +81,9 @@ export function PointsCardList({
   onDeletePoint: (point: Point) => void;
   onOpenIssues: (point: Point) => void;
   onSetAttributeValue: (pointId: string, attributeId: string, value: string) => void;
+  onSetPhysicalEquipmentCheck: (id: string, field: PhysicalEquipmentField, value: CheckState) => void;
+  onCreatePhysicalEquipment?: (equipmentId: string, name: string) => Promise<void>;
+  onDeletePhysicalEquipment?: (id: string) => void;
   // A field installer gets this same card layout, not a separate one --
   // everything here is in their capability list except the Commissioning
   // checklist and deleting a point. RLS already blocks both server-side
@@ -114,6 +125,15 @@ export function PointsCardList({
     [installChecks]
   );
   const issuesByPointId = useMemo(() => groupIssuesByPointId(issues), [issues]);
+  const physicalEquipmentByEquipmentId = useMemo(() => {
+    const map = new Map<string, PhysicalEquipment[]>();
+    for (const pe of physicalEquipment) {
+      const list = map.get(pe.equipment_id);
+      if (list) list.push(pe);
+      else map.set(pe.equipment_id, [pe]);
+    }
+    return map;
+  }, [physicalEquipment]);
 
   const attrs = useMemo(
     () => attributesForProject(pointAttributes, pointAttributeProjects, projectId),
@@ -268,6 +288,17 @@ export function PointsCardList({
                     </span>
                   )}
                 </div>
+                <PhysicalEquipmentChecklist
+                  items={physicalEquipmentByEquipmentId.get(g.equipmentId) ?? []}
+                  installerView={installerView}
+                  onSetCheck={onSetPhysicalEquipmentCheck}
+                  onCreate={
+                    installerView || !onCreatePhysicalEquipment
+                      ? undefined
+                      : (name) => onCreatePhysicalEquipment(g.equipmentId, name)
+                  }
+                  onDelete={installerView ? undefined : onDeletePhysicalEquipment}
+                />
                 {g.items.map((point) => {
                   const ic = installChecksByPointId.get(point.id);
                   const isExpanded = expandedPointIds.has(point.id);

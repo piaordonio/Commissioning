@@ -784,6 +784,49 @@ reason: GoTrue creates users as the `supabase_auth_admin` role, which has
 no grants on the `public` schema, so without `security definer` every
 sign-up — not just invited ones — would fail outright.
 
+### Physical equipment: a prerequisite gate on the Install checklist
+
+The 7-field Install checklist (Pipe/Flex, Pulled, Mounted, …) is tracked
+per *point*, and the existing "equipment" grouping in the points list is
+really a controller/panel, not a physical unit — one controller commonly
+serves 2-3 separate pieces of equipment (a supply fan, a heating coil),
+each needing its own readiness sign-off before a tech starts piping or
+pulling wire to any of that controller's points. `physical_equipment`
+(`supabase/schema.sql`) is a second, coarser level nested under each
+equipment/controller row, with its own fixed 3-field checklist — **Space
+Ready**, **Equipment Installed**, **Ducted/Piped** — shown in its own
+small section right under the equipment group header in both
+`PointsCardList.tsx` (phone) and `PointsView.tsx` (desktop), via the
+shared `PhysicalEquipmentChecklist.tsx` component. Unlike every other
+table in this schema, there's nothing to import these from — a tech adds
+them by hand per controller (`+ Add equipment`), and re-import never
+touches this table (equipment is never hard-deleted on re-import, so these
+rows just ride along).
+
+An installer can set all 3 checklist fields (same access as Install
+fields elsewhere) but can't create, rename, or delete a physical equipment
+row — that's owner/admin only. Enforced the same way as
+`installer_update_point()`: `physical_equipment` has no installer write
+policy on the table at all, so the only path is
+`installer_set_physical_equipment_check()`, which validates the field name
+against a 3-value allowlist (dynamic SQL column name, so this also guards
+against SQL injection) and checks `is_installer_on()` itself.
+
+**A real bug this surfaced**: verifying the new RPC's write actually
+landed uncovered that `installer_update_point()` — live since the
+original field-installer rollout — was missing `security definer`. Its
+`UPDATE points ...` ran as the calling (installer) role, which has no RLS
+write policy on `points` at all; with no policy permitting it, the update
+silently affected 0 rows under RLS (no error — RLS filtering isn't a
+rejection, the function just returns success having written nothing).
+Every Notes/Blocked By edit a field installer made through the restricted
+view was lost the moment it was typed, with the UI showing it as saved
+(optimistic local update) the whole time. Fixed alongside the new RPC,
+both now run `security definer` with a pinned `search_path`, and the fix
+was confirmed by reproducing the exact failure (an installer role calling
+the un-fixed function, writing a note, reading it back as the owner, and
+finding it blank) before and after.
+
 ### Why five operations are Postgres functions, not plain inserts/updates
 
 `import_points()`, `bulk_set_points()`, `bulk_set_install_checks()`,

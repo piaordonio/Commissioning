@@ -27,6 +27,8 @@ import {
   InviteResult,
   Issue,
   IssueStatus,
+  PhysicalEquipment,
+  PhysicalEquipmentField,
   Point,
   PointAttribute,
   PointAttributeOption,
@@ -125,6 +127,7 @@ export default function App() {
 
   const [projects, setProjects] = useState<Project[]>([]);
   const [equipment, setEquipment] = useState<Equipment[]>([]);
+  const [physicalEquipment, setPhysicalEquipment] = useState<PhysicalEquipment[]>([]);
   const [points, setPoints] = useState<Point[]>([]);
   const [installChecks, setInstallChecks] = useState<InstallCheck[]>([]);
   const [issues, setIssues] = useState<Issue[]>([]);
@@ -168,6 +171,7 @@ export default function App() {
   const refreshProjectData = async (id: string) => {
     if (!id) {
       setEquipment([]);
+      setPhysicalEquipment([]);
       setPoints([]);
       setInstallChecks([]);
       setIssues([]);
@@ -181,8 +185,10 @@ export default function App() {
     ]);
     setEquipment(eq);
     setPoints(pts);
+    const equipmentIds = eq.map((e) => e.id);
     const pointIds = pts.map((p) => p.id);
-    const [checks, iss, attrValues, installers] = await Promise.all([
+    const [physEq, checks, iss, attrValues, installers] = await Promise.all([
+      api.listPhysicalEquipment<PhysicalEquipment>(equipmentIds),
       api.listInstallChecks<InstallCheck>(pointIds),
       api.listIssues<Issue>(pointIds),
       api.listPointAttributeValues<PointAttributeValue>(pointIds),
@@ -192,6 +198,7 @@ export default function App() {
       // this call on isInstallerOnly to skip.
       api.listProjectInstallers<ProjectInstaller>(id),
     ]);
+    setPhysicalEquipment(physEq);
     setInstallChecks(checks);
     setIssues(iss);
     setPointAttributeValues(attrValues);
@@ -346,6 +353,37 @@ export default function App() {
       return Array.from(byPointId.values());
     });
     api.bulkSetInstallChecks(updates).catch(() => refreshAll());
+  };
+
+  // The prerequisite checklist gating point-level Install work -- see
+  // physical_equipment in supabase/schema.sql. Branches by role the same
+  // way updatePoint/installerUpdatePointNotes does: an installer has no
+  // direct write policy on this table at all, so their write goes through
+  // installer_set_physical_equipment_check() instead of a plain update.
+  const setPhysicalEquipmentCheck = (id: string, field: PhysicalEquipmentField, value: CheckState) => {
+    setPhysicalEquipment((list) => list.map((pe) => (pe.id === id ? { ...pe, [field]: value } : pe)));
+    const write = isInstallerOnly
+      ? api.installerSetPhysicalEquipmentCheck(id, field, value)
+      : api.update<PhysicalEquipment>("physical_equipment", id, { [field]: value });
+    write.catch(() => refreshAll());
+  };
+
+  // Create/rename/delete are owner/admin-only (no installer UI path calls
+  // these -- RLS would reject them anyway), so these stay plain, unbranched
+  // calls, unlike setPhysicalEquipmentCheck above.
+  const createPhysicalEquipment = async (equipmentId: string, name: string): Promise<void> => {
+    const created = await api.create<PhysicalEquipment>("physical_equipment", { equipment_id: equipmentId, name });
+    setPhysicalEquipment((list) => [...list, created]);
+  };
+
+  const renamePhysicalEquipment = (id: string, name: string) => {
+    setPhysicalEquipment((list) => list.map((pe) => (pe.id === id ? { ...pe, name } : pe)));
+    api.update<PhysicalEquipment>("physical_equipment", id, { name }).catch(() => refreshAll());
+  };
+
+  const deletePhysicalEquipment = (id: string) => {
+    setPhysicalEquipment((list) => list.filter((pe) => pe.id !== id));
+    api.remove("physical_equipment", id).catch(() => refreshAll());
   };
 
   // point_attribute_values is sparse -- unlike setPointValue/setInstallValue,
@@ -708,6 +746,7 @@ export default function App() {
             projectId={projectId}
             points={points}
             equipment={equipment}
+            physicalEquipment={physicalEquipment}
             installChecks={installChecks}
             issues={issues}
             pointAttributes={pointAttributes}
@@ -720,6 +759,9 @@ export default function App() {
             onDeletePoint={deletePoint}
             onOpenIssues={(point) => setIssuesModalPointId(point.id)}
             onSetAttributeValue={setAttributeValue}
+            onSetPhysicalEquipmentCheck={setPhysicalEquipmentCheck}
+            onCreatePhysicalEquipment={isInstallerOnly ? undefined : createPhysicalEquipment}
+            onDeletePhysicalEquipment={isInstallerOnly ? undefined : deletePhysicalEquipment}
             installerView={isInstallerOnly}
           />
         ) : (
@@ -727,6 +769,7 @@ export default function App() {
             projectId={projectId}
             points={points}
             equipment={equipment}
+            physicalEquipment={physicalEquipment}
             installChecks={installChecks}
             issues={issues}
             pointAttributes={pointAttributes}
@@ -742,6 +785,9 @@ export default function App() {
             onOpenIssues={(point) => setIssuesModalPointId(point.id)}
             onSetAttributeValue={setAttributeValue}
             onBulkSetAttributeValues={bulkSetAttributeValues}
+            onSetPhysicalEquipmentCheck={setPhysicalEquipmentCheck}
+            onCreatePhysicalEquipment={isInstallerOnly ? undefined : createPhysicalEquipment}
+            onDeletePhysicalEquipment={isInstallerOnly ? undefined : deletePhysicalEquipment}
             installerView={isInstallerOnly}
           />
         )}
