@@ -2,6 +2,7 @@ import { supabase } from "./supabaseClient";
 import { ImportEquipmentDraft, ImportPointDraft } from "./mdbImport";
 import { ControllerPointRow } from "./controllerImport";
 import { Equipment, Point } from "./types";
+import { toLoginEmail } from "./username";
 
 type ListTable = "projects" | "equipment" | "point_attributes" | "point_attribute_options" | "point_attribute_projects";
 type WriteTable = "projects" | "equipment" | "points" | "issues" | "point_attributes" | "point_attribute_options";
@@ -203,14 +204,15 @@ export const api = {
   },
 
   // Inserts a pending (user_id null) invite -- activated the moment that
-  // email signs up, see activate_pending_installer_invites() in
-  // supabase/schema.sql. Plain insert, no RPC needed: this is a single-row
-  // write with no multi-statement atomicity concern the way import/bulk-set
-  // have.
-  inviteInstaller: async <T>(projectId: string, email: string): Promise<T> => {
+  // username signs up, see activate_pending_installer_invites() in
+  // supabase/schema.sql. Stores the same synthetic address signInWithPassword/
+  // signUp use (see ../username.ts) so the match on auth.users.email lines up.
+  // Plain insert, no RPC needed: this is a single-row write with no
+  // multi-statement atomicity concern the way import/bulk-set have.
+  inviteInstaller: async <T>(projectId: string, username: string): Promise<T> => {
     const { data, error } = await supabase
       .from("project_installers")
-      .insert({ project_id: projectId, email: email.trim().toLowerCase() })
+      .insert({ project_id: projectId, email: toLoginEmail(username) })
       .select()
       .single();
     return assertNoError(data as T | null, error);
@@ -230,10 +232,10 @@ export const api = {
     return assertNoError(data as T[] | null, error);
   },
 
-  inviteAdmin: async <T>(email: string): Promise<T> => {
+  inviteAdmin: async <T>(username: string): Promise<T> => {
     const { data, error } = await supabase
       .from("pending_admins")
-      .insert({ email: email.trim().toLowerCase() })
+      .insert({ email: toLoginEmail(username) })
       .select()
       .single();
     return assertNoError(data as T | null, error);

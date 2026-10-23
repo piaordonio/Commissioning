@@ -19,6 +19,7 @@ import { buildActiveIssueRows, buildOpenIssueCountByEquipment, groupIssuesByPoin
 import { attributesForProject, buildAttributeValueMap } from "../pointAttributes";
 import { PointGroup, usePointRows } from "../usePointRows";
 import { resolvedPointNumber } from "../pointNumber";
+import { fromLoginEmail } from "../username";
 
 // A project-wide rollup, not a narrowed working view like the grid/mobile
 // card list -- same architectural slot as PointsReport.tsx, a purpose-built
@@ -61,18 +62,18 @@ export function ProjectDashboard({
   // installer is a once-in-a-while admin action, not something that should
   // eat vertical space above the project rollup every time you open it.
   const [showInstallers, setShowInstallers] = useState(false);
-  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteUsername, setInviteUsername] = useState("");
   const [inviting, setInviting] = useState(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
 
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inviteEmail.trim()) return;
+    if (!inviteUsername.trim()) return;
     setInviting(true);
     setInviteError(null);
     try {
-      await onInviteInstaller(inviteEmail.trim());
-      setInviteEmail("");
+      await onInviteInstaller(inviteUsername.trim());
+      setInviteUsername("");
     } catch (err: any) {
       setInviteError(err.message ?? "Failed to invite installer");
     } finally {
@@ -258,10 +259,10 @@ export function ProjectDashboard({
         <div className="dashboard-installers">
           <form className="form-row" style={{ display: "flex", gap: 8 }} onSubmit={handleInvite}>
             <input
-              type="email"
-              placeholder="installer@example.com"
-              value={inviteEmail}
-              onChange={(e) => setInviteEmail(e.target.value)}
+              type="text"
+              placeholder="username"
+              value={inviteUsername}
+              onChange={(e) => setInviteUsername(e.target.value)}
               style={{ flex: 1 }}
             />
             <button type="submit" className="btn-primary" disabled={inviting}>
@@ -277,7 +278,7 @@ export function ProjectDashboard({
                 <tbody>
                   {projectInstallers.map((pi) => (
                     <tr key={pi.email}>
-                      <td>{pi.email}</td>
+                      <td>{fromLoginEmail(pi.email)}</td>
                       <td>
                         <span className={`status-pill ${pi.user_id ? "status-commissioned" : "status-not_started"}`}>
                           {pi.user_id ? "Active" : "Pending"}
@@ -290,7 +291,8 @@ export function ProjectDashboard({
                           title="Revoke access"
                           aria-label="Revoke access"
                           onClick={() => {
-                            if (window.confirm(`Remove ${pi.email}'s access to this project?`)) onRevokeInstaller(pi.email);
+                            if (window.confirm(`Remove ${fromLoginEmail(pi.email)}'s access to this project?`))
+                              onRevokeInstaller(pi.email);
                           }}
                         >
                           🗑

@@ -662,10 +662,15 @@ npm run build   # production build, output in web/dist
 ### One-time setup
 
 1. **Create a Supabase project** at [supabase.com](https://supabase.com) (free tier is plenty for this).
-2. **Confirm Email auth is enabled**: Dashboard → Authentication → Providers
-   → Email (on by default for a new project). No app registration, no
-   external IT step — this app uses plain email/password, not an OAuth
-   provider (see "Accounts, ownership, and field installers" below for why).
+2. **Confirm Email auth is enabled, and turn "Confirm email" off**: Dashboard
+   → Authentication → Providers → Email (the provider itself is on by
+   default; "Confirm email" is a separate toggle on the same page and is
+   also on by default — turn it off). Logins here are usernames, not real
+   addresses (see "Accounts, ownership, and field installers" below), so
+   there's no inbox to send a confirmation link to — leaving this on makes
+   every sign-up fail silently waiting on an email that can never arrive.
+   No app registration, no external IT step either way — this app uses
+   plain email/password under the hood, not an OAuth provider.
 3. **Run the schema**: Dashboard → SQL Editor → New query → paste the
    contents of [`supabase/schema.sql`](supabase/schema.sql) → Run. Creates
    every table this app uses (`projects`, `equipment`, `points`, and the
@@ -693,6 +698,16 @@ npm run build   # production build, output in web/dist
 
 ### Accounts, ownership, and field installers
 
+Logins are a **username and password**, not a real email address. Supabase
+Auth is email/password under the hood, so a username typed into the login
+screen is mapped to a synthetic, never-delivered address under a reserved
+domain set aside for exactly this (`accounts.commissioning.invalid` — see
+`web/src/username.ts`) before it's sent to Supabase. That's also why
+"Confirm email" has to be off (step 2 above): a confirmation link can never
+reach an address that was never real to begin with. Field installers are
+often subcontractor crews with no company email to hand out, and nobody
+wants sign-in gated on an inbox anyway.
+
 Every table has Row Level Security enabled, and every policy requires a
 real login (`auth.uid() is not null`) one way or another — the anon key
 still ships in the client bundle (public by design in Supabase's model), it
@@ -711,17 +726,17 @@ there:
   first admin has to be bootstrapped by hand in the SQL Editor —
   `insert into admin_users (user_id) values ('<your-auth-uid>');` — but
   from then on, that admin can invite more from the header's "Manage
-  Project Managers" button: same pending-invite-by-email mechanism as
+  Project Managers" button: same pending-invite-by-username mechanism as
   installers (`pending_admins`, activated by a trigger on `auth.users` the
-  moment that email signs up), just for the admin role instead of a
+  moment that username signs up), just for the admin role instead of a
   project assignment. Deliberately a narrower circle than installer
   invites — only an existing admin can grant this, not any project owner,
   since it hands out full-account access rather than access to one
   project.
 - **A field installer** sees only the specific project(s) they're invited
   to (`project_installers`, managed from the "Installers" panel on each
-  project's Dashboard — invite by email, revoke anytime), and only gets a
-  restricted shell (`InstallerPointsView.tsx`): the 7 Install fields,
+  project's Dashboard — invite by username, revoke anytime), and only gets
+  a restricted shell (`InstallerPointsView.tsx`): the 7 Install fields,
   Notes, Blocked By, and the Issues log. No Commissioning checklist, no
   custom attributes, no project-admin actions (Delete/Reset/Import/Check
   Against Controller) — enforced by RLS and a handful of explicit checks
@@ -729,15 +744,20 @@ there:
   (see `installer_update_point()` and the guards on `import_points()`/
   `bulk_set_points()`/`pair_reimported_point()`/`set_controller_status()`
   in `supabase/schema.sql`), not just by the UI omitting a button.
-  Inviting someone by email works before they've ever signed up — the
+  Inviting someone by username works before they've ever signed up — the
   invite sits pending (`project_installers.user_id` null) until that exact
-  email creates an account, at which point a trigger on `auth.users`
+  username creates an account, at which point a trigger on `auth.users`
   activates it automatically. That's also why sign-up is left open to
   anyone rather than gated behind an invite code: an unsolicited sign-up
   just gets an account with nothing assigned to it, inert until an owner
-  has already invited that email somewhere — which avoids this app needing
-  its first privileged server-side component (an Edge Function with a
-  service-role key) just to create accounts.
+  has already invited that username somewhere — which avoids this app
+  needing its first privileged server-side component (an Edge Function
+  with a service-role key) just to create accounts. The two `auth.users`
+  triggers (`activate_pending_installer_invites`, `activate_pending_admin_invites`)
+  both run `security definer` for the same reason: GoTrue creates users as
+  the `supabase_auth_admin` role, which has no grants on the `public`
+  schema, so without `security definer` every sign-up — not just invited
+  ones — would fail outright.
 
 ### Why five operations are Postgres functions, not plain inserts/updates
 

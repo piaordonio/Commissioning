@@ -1,39 +1,43 @@
 import { useState } from "react";
 import { supabase } from "../supabaseClient";
+import { toLoginEmail } from "../username";
 
 // The one login screen every account type lands on -- a tech/designer and a
 // field installer sign in through the exact same form; which project(s) and
 // which columns they see afterward comes entirely from RLS (see
 // supabase/schema.sql's owner_id/project_installers policies), not a
-// different UI here. Email+password rather than an OAuth provider: installers
-// are often subcontractor crews with no account in your company's identity
-// system, so this is the one option guaranteed to work for everyone, and it
-// needs no external app registration to turn on.
+// different UI here. Username+password, not a real email: installers are
+// often subcontractor crews with no company email to use, and nobody here
+// wants to wait on a confirmation inbox. Supabase Auth is email/password
+// under the hood, so the username is mapped to a synthetic, never-delivered
+// address (see ../username.ts) -- which only works if this project's
+// "Confirm email" setting is off, since that synthetic address can never
+// receive a real confirmation link.
 export function AuthScreen() {
   const [mode, setMode] = useState<"signin" | "signup">("signin");
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Supabase's default project setting requires confirming a new address by
-  // email before it returns a session -- shown instead of silently doing
-  // nothing when that's the case, since there's no account-level control
-  // here over whether that confirmation step is on.
-  const [checkEmail, setCheckEmail] = useState(false);
+  // Shown if Supabase's "Confirm email" project setting is still on --
+  // sign-up succeeds but comes back without a session, and since usernames
+  // here aren't real addresses, no confirmation link can ever arrive.
+  const [needsConfirmOff, setNeedsConfirmOff] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
     setError(null);
-    setCheckEmail(false);
+    setNeedsConfirmOff(false);
     try {
+      const email = toLoginEmail(username);
       if (mode === "signin") {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
       } else {
         const { data, error } = await supabase.auth.signUp({ email, password });
         if (error) throw error;
-        if (!data.session) setCheckEmail(true);
+        if (!data.session) setNeedsConfirmOff(true);
       }
     } catch (err: any) {
       setError(err.message ?? "Something went wrong");
@@ -49,13 +53,13 @@ export function AuthScreen() {
           <span className="app-logo">◎</span> Commissioning Points
         </div>
         <label>
-          Email
+          Username
           <input
-            type="email"
+            type="text"
             autoComplete="username"
             required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
           />
         </label>
         <label>
@@ -70,8 +74,12 @@ export function AuthScreen() {
           />
         </label>
         {error && <div className="error-banner">{error}</div>}
-        {checkEmail && (
-          <div className="muted-text">Check your email to confirm your account, then sign in.</div>
+        {needsConfirmOff && (
+          <div className="error-banner">
+            Account created, but this project still requires email confirmation -- and usernames here aren't real
+            addresses, so no confirmation link can ever arrive. In the Supabase dashboard, go to Authentication →
+            Providers → Email and turn off "Confirm email", then sign in again.
+          </div>
         )}
         <button type="submit" className="btn-primary" disabled={submitting}>
           {submitting ? "Please wait…" : mode === "signin" ? "Sign In" : "Create Account"}
@@ -82,7 +90,7 @@ export function AuthScreen() {
           onClick={() => {
             setMode((m) => (m === "signin" ? "signup" : "signin"));
             setError(null);
-            setCheckEmail(false);
+            setNeedsConfirmOff(false);
           }}
         >
           {mode === "signin" ? "Need an account? Sign up" : "Already have an account? Sign in"}
