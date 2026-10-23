@@ -751,10 +751,17 @@ toggle is simply never shown, same `showCommissioning` state the regular
 Columns toggle already uses, just defaulted off and hidden rather than
 left switchable) and **deleting a point**. Everything else — Install
 fields, custom attribute values, Notes, Blocked By, the Issues log, the
-Install/Issues modes of Print Report — is fully visible and editable, the
-same as an owner. No Dashboard and no other project-admin actions
-(Delete Project/Import/Check Against Controller/Manage Attributes), those
-stay owner/admin-only. Enforced by RLS, not just the UI hiding controls:
+Install/Issues modes of Print Report, and the Dashboard — is fully visible
+(and, everywhere but the Dashboard, editable), the same as an owner. On
+the Dashboard specifically, every Commissioning-specific number is swapped
+for its Install counterpart instead of just hidden — the equipment
+breakdown groups by Install completion ("Install Incomplete"/"Install
+Complete") rather than Commissioning status, and per-point status pills
+show Install status — and the Installers panel (inviting other
+installers) is hidden there too, same reasoning as Manage Attributes.
+Delete Project/Import/Check Against Controller/Manage Attributes stay
+owner/admin-only everywhere. Enforced by RLS, not just the UI hiding
+controls:
 there's no write policy on `points` for an installer at all (so even the
 Commissioning fields, technically readable as plain columns on a row they
 can already SELECT, can never be written by them — editing routes through

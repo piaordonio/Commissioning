@@ -14,7 +14,14 @@ import {
   ProjectInstaller,
 } from "../types";
 import { averageProgress, buildProgressByEquipment } from "../progress";
-import { averageInstallProgress, buildInstallProgressByEquipment, installFieldPercent } from "../installProgress";
+import {
+  averageInstallProgress,
+  buildInstallProgressByEquipment,
+  installFieldPercent,
+  installStatus,
+  InstallStatus,
+  INSTALL_STATUS_LABELS,
+} from "../installProgress";
 import { buildActiveIssueRows, buildOpenIssueCountByEquipment, groupIssuesByPointId, openIssueCount } from "../issues";
 import { attributesForProject, buildAttributeValueMap } from "../pointAttributes";
 import { PointGroup, usePointRows } from "../usePointRows";
@@ -41,6 +48,7 @@ export function ProjectDashboard({
   onInviteInstaller,
   onRevokeInstaller,
   onBack,
+  installerView = false,
 }: {
   projectId: string;
   points: Point[];
@@ -56,6 +64,14 @@ export function ProjectDashboard({
   onInviteInstaller: (email: string) => Promise<void>;
   onRevokeInstaller: (email: string) => void;
   onBack: () => void;
+  // Same restriction as the points grid/cards: an installer sees this same
+  // Dashboard, just with every Commissioning-specific number swapped for
+  // its Install counterpart -- the two-column equipment breakdown groups
+  // by Install completion instead of Commissioning status, and per-point
+  // status pills show Install status instead of Commissioning status. The
+  // Installers panel itself (inviting other installers) also only makes
+  // sense for an owner/admin, so it's hidden too.
+  installerView?: boolean;
 }) {
   // Collapsed by default -- same reasoning as every other rarely-needed
   // toolbar section in this app (Actions ▾, Filters ▾): inviting an
@@ -152,6 +168,17 @@ export function ProjectDashboard({
   const commissionedGroups = groups.filter((g) => g.items.every((p) => p.status === "commissioned"));
   const notCommissionedGroups = groups.filter((g) => !g.items.every((p) => p.status === "commissioned"));
 
+  // Installer counterpart to the Commissioning split above -- same exact-
+  // match-against-status shape, just keyed by each point's Install status
+  // instead. Only computed/rendered when installerView, but cheap enough
+  // not to bother gating the computation itself.
+  const installCompleteGroups = groups.filter((g) =>
+    g.items.every((p) => installStatus(installChecksByPointId.get(p.id)) === "complete")
+  );
+  const installIncompleteGroups = groups.filter(
+    (g) => !g.items.every((p) => installStatus(installChecksByPointId.get(p.id)) === "complete")
+  );
+
   // Same per-point status breakdown the grid's toolbar already shows, but
   // scoped to each column rather than one project-wide line -- "Not
   // Commissioned" groups equipment that isn't fully done, but its
@@ -172,6 +199,21 @@ export function ProjectDashboard({
   const commissionedStatusCounts = useMemo(
     () => pointStatusCounts(commissionedGroups.flatMap((g) => g.items)),
     [commissionedGroups]
+  );
+
+  // Install-status counterpart to pointStatusCounts above.
+  const pointInstallStatusCounts = (pts: Point[]) => {
+    const counts: Record<InstallStatus, number> = { not_started: 0, in_progress: 0, complete: 0 };
+    for (const p of pts) counts[installStatus(installChecksByPointId.get(p.id))]++;
+    return counts;
+  };
+  const installIncompleteStatusCounts = useMemo(
+    () => pointInstallStatusCounts(installIncompleteGroups.flatMap((g) => g.items)),
+    [installIncompleteGroups, installChecksByPointId]
+  );
+  const installCompleteStatusCounts = useMemo(
+    () => pointInstallStatusCounts(installCompleteGroups.flatMap((g) => g.items)),
+    [installCompleteGroups, installChecksByPointId]
   );
 
   const renderEquipmentRow = (g: PointGroup) => {
@@ -200,9 +242,11 @@ export function ProjectDashboard({
           >
             Install {installPct}%
           </span>
-          <span className={`progress-pill ${pct > 90 ? "progress-pill-high" : pct < 10 ? "progress-pill-low" : ""}`}>
-            Commissioning {pct}%
-          </span>
+          {!installerView && (
+            <span className={`progress-pill ${pct > 90 ? "progress-pill-high" : pct < 10 ? "progress-pill-low" : ""}`}>
+              Commissioning {pct}%
+            </span>
+          )}
           {issueCount > 0 && (
             <span className="issue-count-pill">
               <span className="issue-icon">!</span> {issueCount} open issue{issueCount === 1 ? "" : "s"}
@@ -218,9 +262,15 @@ export function ProjectDashboard({
               const openCount = openIssueCount(issuesByPointId.get(point.id));
               return (
                 <div key={point.id} className="dashboard-point-row">
-                  <span className="mono">{resolvedPointNumber(point)}</span>
+                  <span>{resolvedPointNumber(point)}</span>
                   <span className="dashboard-point-descriptor">{point.descriptor}</span>
-                  <span className={`status-pill status-${point.status}`}>{POINT_STATUS_LABELS[point.status]}</span>
+                  {installerView ? (
+                    <span className={`status-pill status-${installStatus(installChecksByPointId.get(point.id))}`}>
+                      {INSTALL_STATUS_LABELS[installStatus(installChecksByPointId.get(point.id))]}
+                    </span>
+                  ) : (
+                    <span className={`status-pill status-${point.status}`}>{POINT_STATUS_LABELS[point.status]}</span>
+                  )}
                   <button
                     type="button"
                     className={`icon-btn issue-flag ${openCount > 0 ? "issue-flag-active" : ""}`}
@@ -250,12 +300,14 @@ export function ProjectDashboard({
           ← Back to Points
         </button>
         <div className="spacer" />
-        <button type="button" className="btn-secondary" onClick={() => setShowInstallers((v) => !v)}>
-          {showInstallers ? "Hide Installers ▲" : `Installers (${projectInstallers.length}) ▾`}
-        </button>
+        {!installerView && (
+          <button type="button" className="btn-secondary" onClick={() => setShowInstallers((v) => !v)}>
+            {showInstallers ? "Hide Installers ▲" : `Installers (${projectInstallers.length}) ▾`}
+          </button>
+        )}
       </div>
 
-      {showInstallers && (
+      {!installerView && showInstallers && (
         <div className="dashboard-installers">
           <form className="form-row" style={{ display: "flex", gap: 8 }} onSubmit={handleInvite}>
             <input
@@ -309,10 +361,12 @@ export function ProjectDashboard({
 
       <div className="dashboard-summary">
         <span className="toolbar-label">
-          {commissionedGroups.length} of {groups.length} equipment commissioned
+          {installerView
+            ? `${installCompleteGroups.length} of ${groups.length} equipment installed`
+            : `${commissionedGroups.length} of ${groups.length} equipment commissioned`}
         </span>
         <span className="progress-pill">Install {overallInstallPct}%</span>
-        <span className="progress-pill">Commissioning {overallPct}%</span>
+        {!installerView && <span className="progress-pill">Commissioning {overallPct}%</span>}
         {activeIssueRows.length > 0 && (
           <span className="issue-count-pill">
             <span className="issue-icon">!</span> {activeIssueRows.length} open issue
@@ -347,38 +401,77 @@ export function ProjectDashboard({
         <div className="empty-state">No points yet.</div>
       ) : (
         <div className="dashboard-columns">
-          <div className="dashboard-column">
-            <div className="dashboard-column-header">
-              Not Commissioned ({notCommissionedGroups.length})
-              {notCommissionedGroups.length > 0 && (
-                <span className="dashboard-column-header-detail">
-                  — {notCommissionedStatusCounts.commissioned} Commissioned,{" "}
-                  {notCommissionedStatusCounts.in_progress} In Progress,{" "}
-                  {notCommissionedStatusCounts.not_started} Not Started
-                </span>
-              )}
-            </div>
-            {notCommissionedGroups.length === 0 ? (
-              <div className="empty-state">Every device is fully commissioned.</div>
-            ) : (
-              notCommissionedGroups.map(renderEquipmentRow)
-            )}
-          </div>
-          <div className="dashboard-column">
-            <div className="dashboard-column-header">
-              Commissioned ({commissionedGroups.length})
-              {commissionedGroups.length > 0 && (
-                <span className="dashboard-column-header-detail">
-                  — {commissionedStatusCounts.commissioned} points commissioned
-                </span>
-              )}
-            </div>
-            {commissionedGroups.length === 0 ? (
-              <div className="empty-state">No devices fully commissioned yet.</div>
-            ) : (
-              commissionedGroups.map(renderEquipmentRow)
-            )}
-          </div>
+          {installerView ? (
+            <>
+              <div className="dashboard-column">
+                <div className="dashboard-column-header">
+                  Install Incomplete ({installIncompleteGroups.length})
+                  {installIncompleteGroups.length > 0 && (
+                    <span className="dashboard-column-header-detail">
+                      — {installIncompleteStatusCounts.complete} Complete,{" "}
+                      {installIncompleteStatusCounts.in_progress} In Progress,{" "}
+                      {installIncompleteStatusCounts.not_started} Not Started
+                    </span>
+                  )}
+                </div>
+                {installIncompleteGroups.length === 0 ? (
+                  <div className="empty-state">Every device is fully installed.</div>
+                ) : (
+                  installIncompleteGroups.map(renderEquipmentRow)
+                )}
+              </div>
+              <div className="dashboard-column">
+                <div className="dashboard-column-header">
+                  Install Complete ({installCompleteGroups.length})
+                  {installCompleteGroups.length > 0 && (
+                    <span className="dashboard-column-header-detail">
+                      — {installCompleteStatusCounts.complete} points installed
+                    </span>
+                  )}
+                </div>
+                {installCompleteGroups.length === 0 ? (
+                  <div className="empty-state">No devices fully installed yet.</div>
+                ) : (
+                  installCompleteGroups.map(renderEquipmentRow)
+                )}
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="dashboard-column">
+                <div className="dashboard-column-header">
+                  Not Commissioned ({notCommissionedGroups.length})
+                  {notCommissionedGroups.length > 0 && (
+                    <span className="dashboard-column-header-detail">
+                      — {notCommissionedStatusCounts.commissioned} Commissioned,{" "}
+                      {notCommissionedStatusCounts.in_progress} In Progress,{" "}
+                      {notCommissionedStatusCounts.not_started} Not Started
+                    </span>
+                  )}
+                </div>
+                {notCommissionedGroups.length === 0 ? (
+                  <div className="empty-state">Every device is fully commissioned.</div>
+                ) : (
+                  notCommissionedGroups.map(renderEquipmentRow)
+                )}
+              </div>
+              <div className="dashboard-column">
+                <div className="dashboard-column-header">
+                  Commissioned ({commissionedGroups.length})
+                  {commissionedGroups.length > 0 && (
+                    <span className="dashboard-column-header-detail">
+                      — {commissionedStatusCounts.commissioned} points commissioned
+                    </span>
+                  )}
+                </div>
+                {commissionedGroups.length === 0 ? (
+                  <div className="empty-state">No devices fully commissioned yet.</div>
+                ) : (
+                  commissionedGroups.map(renderEquipmentRow)
+                )}
+              </div>
+            </>
+          )}
           <div className="dashboard-column dashboard-issues-panel">
             <div className="dashboard-column-header">Active Issues ({sortedActiveIssueRows.length})</div>
             {sortedActiveIssueRows.length === 0 ? (
@@ -388,7 +481,7 @@ export function ProjectDashboard({
                 <div key={issue.id} className="dashboard-issue-row">
                   <button type="button" className="dashboard-issue-row-main" onClick={() => onOpenIssues(point)}>
                     <span>
-                      <span className="mono">{resolvedPointNumber(point)}</span> {point.descriptor}
+                      {resolvedPointNumber(point)} {point.descriptor}
                     </span>
                     <span className="muted-text">{eq?.tag ?? ""}</span>
                     <div className="issue-description">{issue.description}</div>

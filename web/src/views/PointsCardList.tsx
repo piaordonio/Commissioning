@@ -279,7 +279,7 @@ export function PointsCardList({
                     >
                       <div className="mobile-point-header">
                         <div className="mobile-point-title">
-                          <span className="mono">{resolvedPointNumber(point)}</span>
+                          <span>{resolvedPointNumber(point)}</span>
                           <span className="muted-text">{displayPanel(point.panel)}</span>
                         </div>
                         {!installerView && (

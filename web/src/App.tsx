@@ -584,22 +584,20 @@ export default function App() {
             unlike the desk-bound actions below -- this is a frequently-
             consulted read view, the same tier as switching to the card
             list, not a rare action worth hiding behind "Actions ▾". */}
-        {/* Dashboard, Delete/Check/Import/Manage Attributes below are a
-            tech/owner's project-admin tools, outside an installer's
-            capability list -- everything else (the points view itself,
-            minus Commissioning and point deletion, and Print Report) is
-            not, see isInstallerOnly in PointsCardList.tsx/PointsView.tsx/
-            PointsReport.tsx. */}
-        {!isInstallerOnly && (
-          <button
-            type="button"
-            className="btn-secondary"
-            disabled={!projectId}
-            onClick={() => setShowDashboard(true)}
-          >
-            Dashboard
-          </button>
-        )}
+        {/* Delete/Check/Import/Manage Attributes below are a tech/owner's
+            project-admin tools, outside an installer's capability list --
+            everything else (Dashboard, the points view itself minus
+            Commissioning and point deletion, and Print Report) is not, see
+            isInstallerOnly in ProjectDashboard.tsx/PointsCardList.tsx/
+            PointsView.tsx/PointsReport.tsx. */}
+        <button
+          type="button"
+          className="btn-secondary"
+          disabled={!projectId}
+          onClick={() => setShowDashboard(true)}
+        >
+          Dashboard
+        </button>
         <button
           type="button"
           className="btn-secondary"
@@ -687,7 +685,7 @@ export default function App() {
             onBack={() => setPrinting(false)}
             installerView={isInstallerOnly}
           />
-        ) : !isInstallerOnly && showDashboard ? (
+        ) : showDashboard ? (
           <ProjectDashboard
             projectId={projectId}
             points={points}
@@ -703,6 +701,7 @@ export default function App() {
             onInviteInstaller={inviteInstaller}
             onRevokeInstaller={revokeInstaller}
             onBack={() => setShowDashboard(false)}
+            installerView={isInstallerOnly}
           />
         ) : isNarrowViewport ? (
           <PointsCardList
