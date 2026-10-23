@@ -120,9 +120,14 @@ export const api = {
     return assertNoError(row as T | null, error);
   },
 
+  // .select() so an RLS-blocked delete is detectable at all -- without it,
+  // PostgREST returns 200 with zero rows affected and no error (RLS
+  // filtering isn't a rejection), so a caller with no delete permission
+  // would otherwise see this resolve successfully having deleted nothing.
   remove: async (table: WriteTable, id: string): Promise<void> => {
-    const { error } = await supabase.from(table).delete().eq("id", id);
+    const { data, error } = await supabase.from(table).delete().eq("id", id).select("id");
     if (error) throw new Error(error.message);
+    if (!data || data.length === 0) throw new Error("Not authorized to delete this.");
   },
 
   // Applied as one Postgres transaction server-side (see bulk_set_points in

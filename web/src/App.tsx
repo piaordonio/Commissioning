@@ -869,6 +869,7 @@ export default function App() {
                 onDelete={deleteIssue}
                 onUpdateRecommendedAction={updateIssueRecommendedAction}
                 onUpdateNotes={updateIssueNotes}
+                installerView={isInstallerOnly}
               />
             </Modal>
           );

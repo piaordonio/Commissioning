@@ -21,6 +21,7 @@ export function IssuesModal({
   onDelete,
   onUpdateRecommendedAction,
   onUpdateNotes,
+  installerView = false,
 }: {
   point: Point;
   equipmentTag: string;
@@ -30,6 +31,11 @@ export function IssuesModal({
   onDelete: (issue: Issue) => void;
   onUpdateRecommendedAction: (issueId: string, recommendedAction: string) => void;
   onUpdateNotes: (issueId: string, notes: string) => void;
+  // issues' DELETE RLS policy is owner/admin only (see supabase/schema.sql)
+  // -- an installer's delete would silently no-op under RLS rather than
+  // error, so the button that'd trigger it is hidden here rather than
+  // shown and left to fail quietly.
+  installerView?: boolean;
 }) {
   const [description, setDescription] = useState("");
   const [recommendedAction, setRecommendedAction] = useState("");
@@ -130,15 +136,17 @@ export function IssuesModal({
                   >
                     {issue.status === "open" ? "Close" : "Reopen"}
                   </button>
-                  <button
-                    type="button"
-                    className="icon-btn"
-                    title="Delete this issue"
-                    aria-label="Delete issue"
-                    onClick={() => onDelete(issue)}
-                  >
-                    🗑
-                  </button>
+                  {!installerView && (
+                    <button
+                      type="button"
+                      className="icon-btn"
+                      title="Delete this issue"
+                      aria-label="Delete issue"
+                      onClick={() => onDelete(issue)}
+                    >
+                      🗑
+                    </button>
+                  )}
                 </div>
 
                 <button
