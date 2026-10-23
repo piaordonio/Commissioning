@@ -32,6 +32,12 @@ body {
   display: flex;
   flex-direction: column;
   height: 100vh;
+  /* dvh accounts for mobile Safari's collapsing address/toolbar; 100vh
+     there is the TALLER fixed value (bar hidden), so the shell can end up
+     sized for more space than is actually visible, clipping content at the
+     bottom. Second declaration overrides in dvh-supporting browsers
+     (iOS 15.4+/2022+), falls back to the line above everywhere else. */
+  height: 100dvh;
 }
 
 .app-header {
@@ -84,6 +90,7 @@ body {
   align-items: center;
   justify-content: center;
   height: 100vh;
+  height: 100dvh;
   color: var(--text-muted);
 }
 
@@ -92,6 +99,7 @@ body {
   align-items: center;
   justify-content: center;
   height: 100vh;
+  height: 100dvh;
   padding: 20px;
 }
 
@@ -1384,13 +1392,25 @@ textarea {
   display: grid;
   grid-template-columns: 1fr;
   gap: 16px;
-  overflow: auto;
-  flex: 1;
 }
+/* flex: 1 + overflow: auto only above the 3-column breakpoint -- there, it
+   keeps the toolbar/summary/Install Progress tiles pinned above a
+   scrollable column area, which is the point on a wide desktop screen with
+   3 columns side by side. Below that width, everything (tiles, equipment
+   groups, Active Issues) stacks in one column and should flow into .app-main's
+   own scroll like every other view -- giving this its own nested scroll
+   region on mobile instead trapped ALL of that stacked content into
+   whatever sliver of the viewport was left under the tiles (as little as
+   ~35% of screen height was observed), leaving the Active Issues panel and
+   the bottom of long equipment lists reachable only by scrolling a second,
+   much smaller region nothing visually marks as scrollable -- easy to miss
+   entirely on a phone, which is exactly what was reported. */
 @media (min-width: 900px) {
   .dashboard-columns {
     grid-template-columns: 1fr 1fr 1fr;
     align-items: start;
+    overflow: auto;
+    flex: 1;
   }
 }
 
