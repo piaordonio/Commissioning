@@ -286,10 +286,22 @@ create table if not exists project_installers (
   primary key (project_id, email)
 );
 
+-- security definer (+ a pinned search_path) is required here, not just good
+-- practice: projects' own SELECT policy calls this function, and
+-- project_installers' SELECT policy below checks back against projects
+-- (to let a project's owner see who they've invited). Without security
+-- definer, this function's query runs as the calling (authenticated) role,
+-- which re-triggers project_installers' RLS, which re-queries projects,
+-- which re-triggers projects' RLS, calling this function again -- infinite
+-- recursion, surfaced as Postgres's "stack depth limit exceeded". Running
+-- as the (RLS-bypassing) function owner instead reads project_installers
+-- directly, breaking the cycle.
 create or replace function is_installer_on(p_project_id uuid)
 returns boolean
 language sql
 stable
+security definer
+set search_path = public
 as $$
   select exists (
     select 1 from project_installers
