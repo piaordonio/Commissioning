@@ -803,6 +803,20 @@ them by hand per controller (`+ Add equipment`), and re-import never
 touches this table (equipment is never hard-deleted on re-import, so these
 rows just ride along).
 
+**"Suggest from names"** speeds that hand-entry up without trusting it
+blindly: `physicalEquipmentSuggest.ts` derives a candidate name from each
+point's descriptor by stripping the leading building code and the
+trailing signal/IO code (`RCGG_BLR_P2_FB` → `BLR_P2`) and grouping points
+under a controller by what's left. Validated against 21 real descriptors
+from a live project — it correctly told `BLR`/`BLR_P2`/`BLR_P3`/`BLR_P4`
+(the boiler itself vs. three distinct pumps) and `DHWH`/`DHWH_P13` (the
+heater vs. its own pump) apart rather than lumping them into one bucket.
+It's a heuristic over free-text descriptors, not a guarantee — a
+convention it wasn't tested against can produce a nonsense grouping — so
+clicking it never creates anything directly: it opens a review list
+(checkbox + editable name + point count per guessed group) and only the
+checked ones are created, on "Add Selected".
+
 An installer can set all 3 checklist fields (same access as Install
 fields elsewhere) but can't create, rename, or delete a physical equipment
 row — that's owner/admin only. Enforced the same way as

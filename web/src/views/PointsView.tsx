@@ -717,6 +717,7 @@ export function PointsView({
                       <td colSpan={3 + visibleFieldCols + 4}>
                         <PhysicalEquipmentChecklist
                           items={physicalEquipmentByEquipmentId.get(g.equipmentId) ?? []}
+                          points={g.items}
                           installerView={installerView}
                           onSetCheck={onSetPhysicalEquipmentCheck}
                           onCreate={

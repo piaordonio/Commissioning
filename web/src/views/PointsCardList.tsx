@@ -290,6 +290,7 @@ export function PointsCardList({
                 </div>
                 <PhysicalEquipmentChecklist
                   items={physicalEquipmentByEquipmentId.get(g.equipmentId) ?? []}
+                  points={g.items}
                   installerView={installerView}
                   onSetCheck={onSetPhysicalEquipmentCheck}
                   onCreate={

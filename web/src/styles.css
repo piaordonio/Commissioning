@@ -1191,6 +1191,36 @@ textarea {
   min-width: 160px;
 }
 
+.physical-equipment-suggestions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  margin-top: 4px;
+  background: white;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+}
+
+.physical-equipment-suggestion-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.physical-equipment-suggestion-name {
+  min-width: 140px;
+  font-weight: 600;
+}
+
+.physical-equipment-suggestion-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
 .table-group-subheader td {
   background: var(--bg);
   padding: 0;
