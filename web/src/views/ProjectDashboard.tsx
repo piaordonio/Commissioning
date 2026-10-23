@@ -507,7 +507,7 @@ export function ProjectDashboard({
                     <div className="issue-description">{issue.description}</div>
                     {issue.recommended_action && (
                       <div className="issue-recommended-action">
-                        <span className="muted-text">Recommended: </span>
+                        <span className="muted-text">Recommended Action: </span>
                         {issue.recommended_action}
                       </div>
                     )}
