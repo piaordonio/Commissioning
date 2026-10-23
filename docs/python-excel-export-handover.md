@@ -4,11 +4,11 @@
 
 A one-off Python script, run locally by the project owner, that takes a
 controller export (`.mdb`/`.accdb`) and produces an Excel workbook laid out
-like this app's own checksheet (Install + Commissioning grid) and Dashboard
-(progress rollups) — **without touching Supabase at all**. Not a scheduled
-job, not a web service: a script you run by hand when you want an Excel
-snapshot straight from an .mdb file, independent of whether anything has
-been imported into the live app yet.
+like this app's own checksheet (Install + Commissioning grid), Dashboard
+(progress rollups), and Issue Log — **without touching Supabase at all**.
+Not a scheduled job, not a web service: a script you run by hand when you
+want an Excel snapshot straight from an .mdb file, independent of whether
+anything has been imported into the live app yet.
 
 ### Explicit constraints (from the conversation that produced this doc)
 
@@ -71,9 +71,11 @@ with the user before building, don't assume.
   The first 3 (Space Ready, Equipment Installed, Ducted / Piped) are
   prerequisite checks and must stay first in column order.
 - `CheckState = "" | "check" | "x" | "na"` — the four states every
-  checklist cell can hold. `IssueStatus`/`IssuePriority` types are also
-  here if the issue log is ever in scope (it isn't for v1 per the
-  conversation, but the types exist if asked later).
+  checklist cell can hold.
+- `IssueStatus` (`open`/`closed`, `ISSUE_STATUS_LABELS`) and
+  `IssuePriority` (`urgent`/`normal`, `ISSUE_PRIORITY_LABELS`) — the Issue
+  Log's own fields, added this session (Priority is recent; don't assume
+  it's absent from the live app's issue log).
 
 Treat this file as the source of truth for field order/weights — don't
 trust a paraphrase of it from memory, re-read it, since both lists have
@@ -108,10 +110,21 @@ Commissioning/Install/Issues-to-Excel export (via `exceljs`, triggered from
 Print Report in the UI), and already implements equipment-grouped rows,
 the color palette (`COLOR` object near the top of the file), status pill
 cell styling (`statusCellSpec`), checkmark/✗/N/A cell styling
-(`checkCellSpec`), and column widths for exactly the two layouts this tool
-needs to reproduce: `exportCommissioningXlsx` and `exportInstallXlsx`.
-Porting this file's structure to `openpyxl`/`xlsxwriter` is the most direct
-path to "matches the web app's own format."
+(`checkCellSpec`), and column widths for all three layouts this tool needs
+to reproduce: `exportCommissioningXlsx`, `exportInstallXlsx`, and
+`exportIssuesXlsx` (Panel / Point # / Descriptor / Issue / Recommended
+Action / Priority / Status / Date Created / Date Closed / Notes — Priority
+sits between Recommended Action and Status, added this session). Porting
+this file's structure to `openpyxl`/`xlsxwriter` is the most direct path
+to "matches the web app's own format."
+
+**Issue Log caveat**: issues are logged live, in the app, against a point
+that already exists in Supabase — there's no issue data inside a `.mdb`
+controller export to read. So this tool's Issue Log sheet has nothing to
+populate it from at .mdb-import time; build it as a correctly-headed,
+empty sheet (same columns as `exportIssuesXlsx`, ready for manual use),
+unless the user instead wants the script to accept a second input for
+existing issue data — confirm which before assuming either way.
 
 ## Suggested Python stack
 
@@ -140,4 +153,6 @@ path to "matches the web app's own format."
 4. Build the Dashboard-equivalent sheet (equipment-level progress rollup —
    mirror `buildProgressByEquipment`/`buildInstallProgressByEquipment`'s
    math, not the live Dashboard UI's React rendering).
-5. Verify against a real `.mdb` file end to end before calling it done.
+5. Add the Issue Log sheet — correct headers (including Priority) per
+   `exportIssuesXlsx`, empty by default per the caveat under item 4 above.
+6. Verify against a real `.mdb` file end to end before calling it done.
