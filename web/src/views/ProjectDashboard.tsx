@@ -79,6 +79,7 @@ export function ProjectDashboard({
   // installer is a once-in-a-while admin action, not something that should
   // eat vertical space above the project rollup every time you open it.
   const [showInstallers, setShowInstallers] = useState(false);
+  const [showInstallBreakdown, setShowInstallBreakdown] = useState(false);
   const [inviteUsername, setInviteUsername] = useState("");
   const [inviting, setInviting] = useState(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
@@ -172,8 +173,10 @@ export function ProjectDashboard({
 
   // Installer counterpart to the Commissioning split above -- same exact-
   // match-against-status shape, just keyed by each point's Install status
-  // instead. Only computed/rendered when installerView, but cheap enough
-  // not to bother gating the computation itself.
+  // instead. Drives the installer view's main two columns, and the
+  // admin/owner view's collapsible Install Status rollup (see
+  // showInstallBreakdown below) -- same data either way, just a different
+  // amount of chrome around it.
   const installCompleteGroups = groups.filter((g) =>
     g.items.every((p) => installStatus(installChecksByPointId.get(p.id)) === "complete")
   );
@@ -218,7 +221,14 @@ export function ProjectDashboard({
     [installCompleteGroups, installChecksByPointId]
   );
 
-  const renderEquipmentRow = (g: PointGroup) => {
+  // pointStatusMode controls only the expanded per-point status pill below --
+  // defaults to the viewer's own role (installer sees Install status,
+  // owner/admin sees Commissioning status), but the admin-only Install
+  // Status rollup overrides it to "install" for its own rows, since those
+  // are grouped by Install status and showing Commissioning status there
+  // would read as contradictory (e.g. a point filed under "Install
+  // Incomplete" showing a "Commissioned" pill).
+  const renderEquipmentRow = (g: PointGroup, pointStatusMode: "install" | "commissioning" = installerView ? "install" : "commissioning") => {
     const eq = equipmentById[g.equipmentId];
     const pct = progressByEquipment.get(g.equipmentId) ?? 0;
     const installPct = installProgressByEquipment.get(g.equipmentId) ?? 0;
@@ -266,7 +276,7 @@ export function ProjectDashboard({
                 <div key={point.id} className="dashboard-point-row">
                   <span>{resolvedPointNumber(point)}</span>
                   <span className="dashboard-point-descriptor">{point.descriptor}</span>
-                  {installerView ? (
+                  {pointStatusMode === "install" ? (
                     <span className={`status-pill status-${installStatus(installChecksByPointId.get(point.id))}`}>
                       {INSTALL_STATUS_LABELS[installStatus(installChecksByPointId.get(point.id))]}
                     </span>
@@ -302,6 +312,11 @@ export function ProjectDashboard({
           ← Back to Points
         </button>
         <div className="spacer" />
+        {!installerView && (
+          <button type="button" className="btn-secondary" onClick={() => setShowInstallBreakdown((v) => !v)}>
+            {showInstallBreakdown ? "Hide Install Status ▲" : "Install Status ▾"}
+          </button>
+        )}
         {!installerView && (
           <button type="button" className="btn-secondary" onClick={() => setShowInstallers((v) => !v)}>
             {showInstallers ? "Hide Installers ▲" : `Installers (${projectInstallers.length}) ▾`}
@@ -419,7 +434,7 @@ export function ProjectDashboard({
                 {installIncompleteGroups.length === 0 ? (
                   <div className="empty-state">Every device is fully installed.</div>
                 ) : (
-                  installIncompleteGroups.map(renderEquipmentRow)
+                  installIncompleteGroups.map((g) => renderEquipmentRow(g))
                 )}
               </div>
               <div className="dashboard-column">
@@ -434,7 +449,7 @@ export function ProjectDashboard({
                 {installCompleteGroups.length === 0 ? (
                   <div className="empty-state">No devices fully installed yet.</div>
                 ) : (
-                  installCompleteGroups.map(renderEquipmentRow)
+                  installCompleteGroups.map((g) => renderEquipmentRow(g))
                 )}
               </div>
             </>
@@ -454,7 +469,7 @@ export function ProjectDashboard({
                 {notCommissionedGroups.length === 0 ? (
                   <div className="empty-state">Every device is fully commissioned.</div>
                 ) : (
-                  notCommissionedGroups.map(renderEquipmentRow)
+                  notCommissionedGroups.map((g) => renderEquipmentRow(g))
                 )}
               </div>
               <div className="dashboard-column">
@@ -469,7 +484,7 @@ export function ProjectDashboard({
                 {commissionedGroups.length === 0 ? (
                   <div className="empty-state">No devices fully commissioned yet.</div>
                 ) : (
-                  commissionedGroups.map(renderEquipmentRow)
+                  commissionedGroups.map((g) => renderEquipmentRow(g))
                 )}
               </div>
             </>
@@ -506,6 +521,49 @@ export function ProjectDashboard({
                   </button>
                 </div>
               ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Admin/owner-only rollup of the same Install Complete/Incomplete
+          split the installer view always shows as its main columns --
+          collapsed by default so the default admin view stays focused on
+          Commissioning, one click away when you need to check install
+          readiness (e.g. before scheduling commissioning on a device) without
+          switching to a separate screen. */}
+      {!installerView && showInstallBreakdown && groups.length > 0 && (
+        <div className="dashboard-columns">
+          <div className="dashboard-column">
+            <div className="dashboard-column-header">
+              Install Incomplete ({installIncompleteGroups.length})
+              {installIncompleteGroups.length > 0 && (
+                <span className="dashboard-column-header-detail">
+                  — {installIncompleteStatusCounts.complete} Complete,{" "}
+                  {installIncompleteStatusCounts.in_progress} In Progress,{" "}
+                  {installIncompleteStatusCounts.not_started} Not Started
+                </span>
+              )}
+            </div>
+            {installIncompleteGroups.length === 0 ? (
+              <div className="empty-state">Every device is fully installed.</div>
+            ) : (
+              installIncompleteGroups.map((g) => renderEquipmentRow(g, "install"))
+            )}
+          </div>
+          <div className="dashboard-column">
+            <div className="dashboard-column-header">
+              Install Complete ({installCompleteGroups.length})
+              {installCompleteGroups.length > 0 && (
+                <span className="dashboard-column-header-detail">
+                  — {installCompleteStatusCounts.complete} points installed
+                </span>
+              )}
+            </div>
+            {installCompleteGroups.length === 0 ? (
+              <div className="empty-state">No devices fully installed yet.</div>
+            ) : (
+              installCompleteGroups.map((g) => renderEquipmentRow(g, "install"))
             )}
           </div>
         </div>
