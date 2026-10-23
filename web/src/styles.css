@@ -583,6 +583,21 @@ textarea {
   background: white;
 }
 
+/* Notes is the one checklist-inline-input that's a <textarea>, not an
+   <input> -- a long note used to just scroll horizontally inside a
+   single-line input with no way to see where it ended. Wrapping is
+   <textarea>'s default; height: auto (overriding the shared height: 100%
+   above, which fought the rows={2} HTML attribute's own sizing) lets the
+   row grow to fit 2 wrapped lines by default, and resize: vertical gives an
+   escape hatch for a genuinely long note without forcing every row taller
+   for everyone. */
+.checklist-notes-input {
+  height: auto;
+  min-height: 2.6em;
+  line-height: 1.3;
+  resize: vertical;
+}
+
 .checklist-blocked {
   background: #fff7e0;
 }
@@ -1163,6 +1178,13 @@ textarea {
   background: #fff7e0;
   color: #7f5200;
   font-weight: 600;
+}
+
+/* Same reasoning as .checklist-notes-input above, for the mobile card
+   list's own Notes field. */
+.mobile-notes-input {
+  line-height: 1.3;
+  resize: vertical;
 }
 
 .mobile-input-row {

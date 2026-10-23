@@ -452,8 +452,9 @@ export function PointsCardList({
 
                           <label className="mobile-text-field">
                             Notes
-                            <input
-                              className="mobile-input"
+                            <textarea
+                              className="mobile-input mobile-notes-input"
+                              rows={2}
                               defaultValue={point.notes}
                               placeholder="—"
                               onBlur={(e) => {

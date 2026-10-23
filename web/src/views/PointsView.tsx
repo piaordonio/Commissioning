@@ -199,8 +199,13 @@ export function PointsView({
     () => autoFitColumnWidth(rows.map((p) => p.descriptor), "Descriptor", BODY_FONT, HEADER_FONT),
     [rows]
   );
+  // Capped unlike the other auto-fit columns above -- Notes is now a
+  // wrapping textarea (see checklist-notes-input below), so a single long
+  // note shouldn't force the column out to that note's full one-line
+  // width; it wraps within this cap instead. Short/empty notes still get a
+  // tight auto-fit width below the cap, same as before.
   const notesColWidth = useMemo(
-    () => autoFitColumnWidth(rows.map((p) => p.notes || "—"), "Notes", NOTES_FONT, HEADER_FONT),
+    () => Math.min(autoFitColumnWidth(rows.map((p) => p.notes || "—"), "Notes", NOTES_FONT, HEADER_FONT), 260),
     [rows]
   );
 
@@ -819,10 +824,21 @@ export function PointsView({
                               </td>
                             </>
                           )}
-                          <td className="divider-left checklist-text-col checklist-notes-col">
-                            <input
+                          <td
+                            className="divider-left checklist-text-col checklist-notes-col"
+                            style={{ width: notesColWidth }}
+                          >
+                            {/* The textarea's own explicit width (not just width: 100% off
+                                the td above, which is what every other column's input relies
+                                on) is load-bearing: a <textarea>'s intrinsic sizing collapses
+                                this auto-layout table's column to its content's min-width
+                                regardless of the td/th's specified width, in a way a plain
+                                <input> never did -- verified by testing with and without it. */}
+                            <textarea
                               key={`${point.id}-notes`}
-                              className="checklist-inline-input"
+                              className="checklist-inline-input checklist-notes-input"
+                              rows={2}
+                              style={{ width: notesColWidth }}
                               defaultValue={point.notes}
                               placeholder="—"
                               onBlur={(e) => {
