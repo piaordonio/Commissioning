@@ -4,6 +4,15 @@
 
 create extension if not exists pgcrypto;
 
+-- Supabase's default statement_timeout for the authenticated/anon roles
+-- (commonly ~8s) is tuned for ordinary request/response API calls, not a
+-- single transaction that imports hundreds of equipment/point rows in one
+-- round trip (import_points() below) -- a large real import can genuinely
+-- take longer than that to run, timing out mid-transaction with no partial
+-- damage (it's all one transaction, so it just rolls back), but also no
+-- result. Raised here rather than left at the platform default.
+alter role authenticated set statement_timeout = '60s';
+
 -- ---- Tables ----
 
 create table if not exists projects (
