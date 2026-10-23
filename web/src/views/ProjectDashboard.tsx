@@ -4,6 +4,7 @@ import {
   INSTALL_FIELDS,
   INSTALL_FIELD_LABELS,
   InstallCheck,
+  ISSUE_PRIORITY_LABELS,
   Issue,
   IssueStatus,
   Point,
@@ -156,6 +157,7 @@ export function ProjectDashboard({
   const sortedActiveIssueRows = useMemo(
     () =>
       [...activeIssueRows].sort((a, b) => {
+        if (a.issue.priority !== b.issue.priority) return a.issue.priority === "urgent" ? -1 : 1;
         const ta = a.equipment?.tag ?? "";
         const tb = b.equipment?.tag ?? "";
         return ta === tb ? a.point.point_number.localeCompare(b.point.point_number) : ta.localeCompare(tb);
@@ -482,6 +484,9 @@ export function ProjectDashboard({
                   <button type="button" className="dashboard-issue-row-main" onClick={() => onOpenIssues(point)}>
                     <span>
                       {resolvedPointNumber(point)} {point.descriptor}
+                      {issue.priority === "urgent" && (
+                        <span className="status-pill priority-urgent">{ISSUE_PRIORITY_LABELS.urgent}</span>
+                      )}
                     </span>
                     <span className="muted-text">{eq?.tag ?? ""}</span>
                     <div className="issue-description">{issue.description}</div>

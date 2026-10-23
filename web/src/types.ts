@@ -207,6 +207,13 @@ export const ISSUE_STATUS_LABELS: Record<IssueStatus, string> = {
   closed: "Closed",
 };
 
+export type IssuePriority = "urgent" | "normal";
+
+export const ISSUE_PRIORITY_LABELS: Record<IssuePriority, string> = {
+  urgent: "Urgent",
+  normal: "Normal",
+};
+
 // Belongs to exactly one point (point_id FK, cascade delete with the
 // point) -- independent of Point.blocked_by, which stays a plain free-text
 // field. A point can have any number of issues, open or closed; see
@@ -216,6 +223,7 @@ export interface Issue {
   point_id: string;
   description: string;
   recommended_action: string;
+  priority: IssuePriority;
   // Report-only: entered alongside description/recommended_action when the
   // issue is logged, but only ever displayed in PointsReport.tsx's Issues
   // mode -- the interactive issue log (IssuesModal, Dashboard) never shows

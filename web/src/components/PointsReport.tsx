@@ -7,6 +7,7 @@ import {
   INSTALL_FIELDS,
   INSTALL_FIELD_LABELS,
   InstallCheck,
+  ISSUE_PRIORITY_LABELS,
   ISSUE_STATUS_LABELS,
   Issue,
   Point,
@@ -703,6 +704,7 @@ export function PointsReport({
                 <th className="checklist-name-col">Descriptor</th>
                 <th className="report-col-issue-desc divider-left">Issue</th>
                 <th className="report-col-issue-desc">Recommended Action</th>
+                <th className="report-col-status divider-left">Priority</th>
                 <th className="report-col-status divider-left">Status</th>
                 <th className="report-col-date divider-left">Date Created</th>
                 <th className="report-col-date divider-left">Date Closed</th>
@@ -716,7 +718,7 @@ export function PointsReport({
                 return (
                   <Fragment key={g.equipmentId}>
                     <tr className="table-group-header">
-                      <td colSpan={10}>
+                      <td colSpan={11}>
                         {eq?.tag ?? g.equipmentId}
                         {eq?.location ? ` — ${eq.location}` : ""}{" "}
                         <span className="issue-count-pill">
@@ -733,6 +735,11 @@ export function PointsReport({
                         </td>
                         <td className="report-col-issue-desc divider-left">{issue.description}</td>
                         <td className="report-col-issue-desc">{issue.recommended_action || "—"}</td>
+                        <td className="report-col-status divider-left">
+                          <span className={`status-pill priority-${issue.priority}`}>
+                            {ISSUE_PRIORITY_LABELS[issue.priority]}
+                          </span>
+                        </td>
                         <td className="report-col-status divider-left">
                           <span className={`status-pill status-${issue.status}`}>
                             {ISSUE_STATUS_LABELS[issue.status]}

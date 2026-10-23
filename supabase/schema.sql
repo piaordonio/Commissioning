@@ -147,8 +147,8 @@ alter table install_checks add column if not exists ducted_piped text not null d
 -- Structured, multi-entry issue log per point -- additive to (and
 -- independent of) the existing points.blocked_by free-text field, which
 -- stays exactly as-is and is never migrated into this table. Deliberately
--- minimal: description, recommended_action, and a bare open/closed status
--- -- no priority, assignee, part number, or per-issue comment trail.
+-- minimal: description, recommended_action, status, and priority -- no
+-- assignee, part number, or per-issue comment trail.
 -- status is purely informational: it is never read by
 -- set_point_status_and_date() below and never gates a point's
 -- commissioning status. Closed issues are kept, not deleted, so history
@@ -176,6 +176,14 @@ alter table issues add column if not exists notes text not null default '';
 -- never written directly by the app, same "trigger-owned" pattern as
 -- points.date_commissioned.
 alter table issues add column if not exists closed_at timestamptz;
+
+-- Idempotent for anyone who already ran an earlier version of this file
+-- before this column existed -- set once in the add form alongside
+-- description (see IssuesModal.tsx), editable after creation same as
+-- recommended_action/notes. 'normal' default so every pre-existing issue
+-- (and any new one left untouched) reads as the common case, not a loud
+-- Urgent by omission.
+alter table issues add column if not exists priority text not null default 'normal' check (priority in ('urgent', 'normal'));
 
 -- User-defined checklist columns on top of the fixed 7 commissioning + 7
 -- install fields above -- modeled on EnteliWEB's own "Point Attributes"

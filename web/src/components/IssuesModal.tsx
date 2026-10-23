@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ISSUE_STATUS_LABELS, Issue, IssueStatus, Point } from "../types";
+import { ISSUE_PRIORITY_LABELS, ISSUE_STATUS_LABELS, Issue, IssuePriority, IssueStatus, Point } from "../types";
 import { formatTimestamp } from "../formatDate";
 
 // Wrapped by the generic <Modal> from App.tsx, same pattern as
@@ -25,7 +25,7 @@ export function IssuesModal({
   point: Point;
   equipmentTag: string;
   issues: Issue[];
-  onAdd: (pointId: string, description: string, recommendedAction: string) => void;
+  onAdd: (pointId: string, description: string, recommendedAction: string, priority: IssuePriority) => void;
   onSetStatus: (issueId: string, status: IssueStatus) => void;
   onDelete: (issue: Issue) => void;
   onUpdateRecommendedAction: (issueId: string, recommendedAction: string) => void;
@@ -33,6 +33,7 @@ export function IssuesModal({
 }) {
   const [description, setDescription] = useState("");
   const [recommendedAction, setRecommendedAction] = useState("");
+  const [priority, setPriority] = useState<IssuePriority>("normal");
   // Collapsed by default, same reasoning as the mobile point cards --
   // Notes only needs to be in view while you're actually editing it, not
   // for every issue in the list all the time. Independent per issue.
@@ -48,6 +49,7 @@ export function IssuesModal({
 
   const sorted = [...issues].sort((a, b) => {
     if (a.status !== b.status) return a.status === "open" ? -1 : 1;
+    if (a.priority !== b.priority) return a.priority === "urgent" ? -1 : 1;
     return b.created_at.localeCompare(a.created_at);
   });
 
@@ -60,9 +62,10 @@ export function IssuesModal({
         onSubmit={(e) => {
           e.preventDefault();
           if (!description.trim()) return;
-          onAdd(point.id, description.trim(), recommendedAction.trim());
+          onAdd(point.id, description.trim(), recommendedAction.trim(), priority);
           setDescription("");
           setRecommendedAction("");
+          setPriority("normal");
         }}
       >
         <label>
@@ -74,6 +77,16 @@ export function IssuesModal({
             rows={2}
             required
           />
+        </label>
+        <label>
+          Priority
+          <select value={priority} onChange={(e) => setPriority(e.target.value as IssuePriority)}>
+            {(Object.keys(ISSUE_PRIORITY_LABELS) as IssuePriority[]).map((p) => (
+              <option key={p} value={p}>
+                {ISSUE_PRIORITY_LABELS[p]}
+              </option>
+            ))}
+          </select>
         </label>
         <label>
           Recommended Action
@@ -102,6 +115,9 @@ export function IssuesModal({
               <div key={issue.id} className="issue-row">
                 <div className="issue-row-header">
                   <span className={`status-pill status-${issue.status}`}>{ISSUE_STATUS_LABELS[issue.status]}</span>
+                  <span className={`status-pill priority-${issue.priority}`}>
+                    {ISSUE_PRIORITY_LABELS[issue.priority]}
+                  </span>
                   <span className="muted-text">Opened {formatTimestamp(issue.created_at)}</span>
                   {issue.status === "closed" && issue.closed_at && (
                     <span className="muted-text">Closed {formatTimestamp(issue.closed_at)}</span>

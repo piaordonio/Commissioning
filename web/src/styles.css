@@ -716,6 +716,14 @@ textarea {
   background: #dcfce7;
   color: #166534;
 }
+.priority-urgent {
+  background: #fee2e2;
+  color: var(--danger);
+}
+.priority-normal {
+  background: #f1f5f9;
+  color: #64748b;
+}
 
 /* Smaller font + tighter padding than the interactive grid: the report
    has to fit a full checklist's worth of columns on one printed page
@@ -1484,6 +1492,10 @@ textarea {
   text-align: left;
   font-family: inherit;
   color: var(--text);
+}
+
+.dashboard-issue-row-main .priority-urgent {
+  margin-left: 6px;
 }
 
 /* Dashboard-only: the issue's own text reads in red so it stands out in a

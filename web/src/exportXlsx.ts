@@ -7,6 +7,7 @@ import {
   INSTALL_FIELDS,
   INSTALL_FIELD_LABELS,
   InstallCheck,
+  ISSUE_PRIORITY_LABELS,
   ISSUE_STATUS_LABELS,
   Issue,
   Point,
@@ -49,6 +50,8 @@ const COLOR = {
   issuePillBg: "FFFFEDD5",
   issuePillText: "FF9A3412",
   blockedWarnText: "FFDC2626",
+  urgentBg: "FFFEE2E2",
+  urgentText: "FFDC2626",
 } as const;
 
 const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
@@ -58,6 +61,8 @@ const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
   complete: { bg: COLOR.doneBg, color: COLOR.doneText },
   open: { bg: COLOR.inProgressBg, color: COLOR.inProgressText },
   closed: { bg: COLOR.doneBg, color: COLOR.doneText },
+  urgent: { bg: COLOR.urgentBg, color: COLOR.urgentText },
+  normal: { bg: COLOR.notStartedBg, color: COLOR.notStartedText },
 };
 
 export function sanitizeFilenamePart(value: string): string {
@@ -393,6 +398,7 @@ export async function exportIssuesXlsx(params: {
     { text: "Descriptor" },
     { text: "Issue", divider: true },
     { text: "Recommended Action" },
+    { text: "Priority", divider: true },
     { text: "Status", divider: true },
     { text: "Date Created", divider: true },
     { text: "Date Closed", divider: true },
@@ -401,7 +407,7 @@ export async function exportIssuesXlsx(params: {
 
   const workbook = new Workbook();
   const ws = workbook.addWorksheet("Issues");
-  ws.columns = [{ width: 12 }, { width: 10 }, { width: 22 }, { width: 32 }, { width: 32 }, { width: 12 }, { width: 13 }, { width: 13 }, { width: 24 }];
+  ws.columns = [{ width: 12 }, { width: 10 }, { width: 22 }, { width: 32 }, { width: 32 }, { width: 11 }, { width: 12 }, { width: 13 }, { width: 13 }, { width: 24 }];
 
   const logoBase64 = await fetchLogoBase64();
   let row = addReportHeader(ws, headers.length, project.project_number ? `${project.project_number} — ${project.name}` : project.name, `${generatedLabel}    ${issuesCountLabel}`, logoBase64);
@@ -421,6 +427,7 @@ export async function exportIssuesXlsx(params: {
         { text: point.descriptor },
         { text: issue.description, divider: true },
         { text: issue.recommended_action || "—" },
+        statusCellSpec(ISSUE_PRIORITY_LABELS[issue.priority], issue.priority, true),
         statusCellSpec(ISSUE_STATUS_LABELS[issue.status], issue.status, true),
         { text: formatTimestamp(issue.created_at), align: "center", divider: true },
         { text: issue.closed_at ? formatTimestamp(issue.closed_at) : "—", align: "center", divider: true },
