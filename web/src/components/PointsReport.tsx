@@ -75,6 +75,7 @@ export function PointsReport({
   pointAttributeValues,
   onOpenIssues,
   onBack,
+  installerView = false,
 }: {
   project: Project;
   equipment: Equipment[];
@@ -86,6 +87,12 @@ export function PointsReport({
   pointAttributeValues: PointAttributeValue[];
   onOpenIssues: (point: Point) => void;
   onBack: () => void;
+  // A field installer can print the Install and Issues reports -- the
+  // Commissioning one is outside their capability list, same as the live
+  // grid. Defaults the mode to Install instead of Commissioning and hides
+  // the Commissioning mode button entirely, rather than just leaving it
+  // reachable and empty.
+  installerView?: boolean;
 }) {
   // "Commissioning" and "Install" are the two handoff checklists the live
   // grid already shows side by side (see "Two checklists, one grid" in
@@ -94,7 +101,9 @@ export function PointsReport({
   // toggle here instead of three separate print flows/header buttons,
   // since all three need the same project data and print CSS and none
   // needs its own screen.
-  const [reportMode, setReportMode] = useState<"commissioning" | "install" | "issues">("commissioning");
+  const [reportMode, setReportMode] = useState<"commissioning" | "install" | "issues">(
+    installerView ? "install" : "commissioning"
+  );
   const [commissionedBy, setCommissionedBy] = useState("");
   const [commissionedByNames, setCommissionedByNames] = useState<string[]>(() => loadCommissionedByNames());
   const [hideDateCommissioned, setHideDateCommissioned] = useState(false);
@@ -294,13 +303,15 @@ export function PointsReport({
           >
             Install
           </button>
-          <button
-            type="button"
-            className={`btn-secondary ${reportMode === "commissioning" ? "btn-mode-active" : ""}`}
-            onClick={() => setReportMode("commissioning")}
-          >
-            Commissioning
-          </button>
+          {!installerView && (
+            <button
+              type="button"
+              className={`btn-secondary ${reportMode === "commissioning" ? "btn-mode-active" : ""}`}
+              onClick={() => setReportMode("commissioning")}
+            >
+              Commissioning
+            </button>
+          )}
           <button
             type="button"
             className={`btn-secondary ${reportMode === "issues" ? "btn-mode-active" : ""}`}

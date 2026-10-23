@@ -1430,11 +1430,14 @@ create policy "delete: owner or admin only" on issues for delete using (
 
 -- point_attributes / point_attribute_options -- attribute *definitions*
 -- (shared vocabulary like "Fail Position"), not project data: readable/
--- writable by any authenticated user, not owner-scoped, same design intent
--- this schema already had before per-user accounts existed. No installer
--- access at all, same as point_attribute_projects/point_attribute_values
--- below -- custom attributes are outside an installer's capability list
--- entirely.
+-- writable by any authenticated user (installers included), not
+-- owner-scoped, same design intent this schema already had before per-user
+-- accounts existed. Defining/assigning attributes (point_attribute_projects'
+-- write side, below) stays owner/admin only -- that's part of "Manage
+-- Attributes", which an installer never sees -- but an installer does read
+-- and enter the actual values (point_attribute_values, further below):
+-- everything but the Commissioning checklist and point deletion is in
+-- scope for them.
 drop policy if exists "anon full access" on point_attributes;
 drop policy if exists "authenticated full access" on point_attributes;
 create policy "authenticated full access" on point_attributes for all using (auth.uid() is not null) with check (auth.uid() is not null);
@@ -1444,7 +1447,15 @@ drop policy if exists "authenticated full access" on point_attribute_options;
 create policy "authenticated full access" on point_attribute_options for all using (auth.uid() is not null) with check (auth.uid() is not null);
 
 -- point_attribute_projects -- the per-project assignment (unlike the
--- definitions above, this IS project data) -- owner/admin only.
+-- definitions above, this IS project data) -- write stays owner/admin only
+-- (assigning which attributes apply to a project is part of "Manage
+-- Attributes", which an installer never sees), but an installer needs to
+-- read this to know which attributes even apply to their project's points
+-- -- added as a second, read-only permissive policy rather than folding
+-- into the "for all" one below, same reasoning as every other
+-- owner/admin-write-plus-broader-read split in this file: a single "for
+-- all" policy including installer would let them DELETE too (DELETE only
+-- ever consults USING, never WITH CHECK).
 drop policy if exists "anon full access" on point_attribute_projects;
 drop policy if exists "owner or admin only" on point_attribute_projects;
 create policy "owner or admin only" on point_attribute_projects for all using (
@@ -1452,9 +1463,18 @@ create policy "owner or admin only" on point_attribute_projects for all using (
 ) with check (
   exists (select 1 from projects pr where pr.id = point_attribute_projects.project_id and (pr.owner_id = auth.uid() or is_admin(auth.uid())))
 );
+drop policy if exists "select: additionally for assigned installer" on point_attribute_projects;
+create policy "select: additionally for assigned installer" on point_attribute_projects for select using (
+  is_installer_on(point_attribute_projects.project_id)
+);
 
--- point_attribute_values -- the actual entered data -- owner/admin only, no
--- installer access at all.
+-- point_attribute_values -- the actual entered data. An installer now sees
+-- and enters these (everything but the Commissioning checklist and point
+-- deletion is in scope for them), added as separate select/insert/update
+-- policies alongside the owner/admin "for all" below rather than widening
+-- it directly -- deliberately no installer DELETE policy at all, matching
+-- "do not allow to delete" the same way points itself has no installer
+-- write policy whatsoever.
 drop policy if exists "anon full access" on point_attribute_values;
 drop policy if exists "owner or admin only" on point_attribute_values;
 create policy "owner or admin only" on point_attribute_values for all using (
@@ -1466,6 +1486,32 @@ create policy "owner or admin only" on point_attribute_values for all using (
   exists (
     select 1 from points p join equipment e on e.id = p.equipment_id join projects pr on pr.id = e.project_id
     where p.id = point_attribute_values.point_id and (pr.owner_id = auth.uid() or is_admin(auth.uid()))
+  )
+);
+drop policy if exists "select: additionally for assigned installer" on point_attribute_values;
+create policy "select: additionally for assigned installer" on point_attribute_values for select using (
+  exists (
+    select 1 from points p join equipment e on e.id = p.equipment_id
+    where p.id = point_attribute_values.point_id and is_installer_on(e.project_id)
+  )
+);
+drop policy if exists "insert: additionally for assigned installer" on point_attribute_values;
+create policy "insert: additionally for assigned installer" on point_attribute_values for insert with check (
+  exists (
+    select 1 from points p join equipment e on e.id = p.equipment_id
+    where p.id = point_attribute_values.point_id and is_installer_on(e.project_id)
+  )
+);
+drop policy if exists "update: additionally for assigned installer" on point_attribute_values;
+create policy "update: additionally for assigned installer" on point_attribute_values for update using (
+  exists (
+    select 1 from points p join equipment e on e.id = p.equipment_id
+    where p.id = point_attribute_values.point_id and is_installer_on(e.project_id)
+  )
+) with check (
+  exists (
+    select 1 from points p join equipment e on e.id = p.equipment_id
+    where p.id = point_attribute_values.point_id and is_installer_on(e.project_id)
   )
 );
 

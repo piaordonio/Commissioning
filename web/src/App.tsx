@@ -10,7 +10,6 @@ import { VerifyControllerModal } from "./components/VerifyControllerModal";
 import { PointsReport } from "./components/PointsReport";
 import { PointsView } from "./views/PointsView";
 import { PointsCardList } from "./views/PointsCardList";
-import { InstallerPointsView } from "./views/InstallerPointsView";
 import { ProjectDashboard } from "./views/ProjectDashboard";
 import { AttributesAdmin } from "./views/AttributesAdmin";
 import { IssuesModal } from "./components/IssuesModal";
@@ -575,17 +574,22 @@ export default function App() {
         {activePoints.length > 0 && (
           <>
             <span className="progress-pill">Install {overallInstallPct}%</span>
-            <span className="progress-pill">Commissioning {overallPct}%</span>
+            {/* An installer has no Commissioning access at all -- showing this
+                percentage in the header would leak that there's Commissioning
+                data to leak, even though the checklist itself stays hidden. */}
+            {!isInstallerOnly && <span className="progress-pill">Commissioning {overallPct}%</span>}
           </>
         )}
         {/* Outside .app-actions-group and never collapsed at narrow widths,
             unlike the desk-bound actions below -- this is a frequently-
             consulted read view, the same tier as switching to the card
             list, not a rare action worth hiding behind "Actions ▾". */}
-        {/* Dashboard, Print, Import, and every admin action below are a
-            tech/owner's tools -- an installer only ever gets the restricted
-            points view (see isInstallerOnly and InstallerPointsView.tsx),
-            so none of this applies to them. */}
+        {/* Dashboard, Delete/Check/Import/Manage Attributes below are a
+            tech/owner's project-admin tools, outside an installer's
+            capability list -- everything else (the points view itself,
+            minus Commissioning and point deletion, and Print Report) is
+            not, see isInstallerOnly in PointsCardList.tsx/PointsView.tsx/
+            PointsReport.tsx. */}
         {!isInstallerOnly && (
           <button
             type="button"
@@ -596,6 +600,14 @@ export default function App() {
             Dashboard
           </button>
         )}
+        <button
+          type="button"
+          className="btn-secondary"
+          disabled={!projectId || points.length === 0}
+          onClick={() => setPrinting(true)}
+        >
+          Print Report
+        </button>
         <div className="spacer" />
         {/* Account-wide, not tied to the currently selected project -- only
             an existing admin ever sees this (RLS already enforces it
@@ -626,20 +638,13 @@ export default function App() {
             <button className="btn-secondary" disabled={!projectId} onClick={() => setVerifying(true)}>
               Check Against Controller
             </button>
-            <button
-              className="btn-secondary"
-              disabled={!projectId || points.length === 0}
-              onClick={() => setPrinting(true)}
-            >
-              Print Report
-            </button>
             <button className="btn-primary" onClick={() => setImporting(true)}>
               Import Access Database
             </button>
             {/* Not disabled when no project is selected, unlike every other
                 button in this group -- attribute definitions are global, not
                 tied to a project the way Delete Project/Check Against
-                Controller/Print Report are. */}
+                Controller/Import are. */}
             <button className="btn-secondary" onClick={() => setShowAttributesAdmin(true)}>
               Manage Attributes
             </button>
@@ -650,17 +655,7 @@ export default function App() {
       {error && <div className="error-banner no-print">{error}</div>}
 
       <div className="app-main">
-        {isInstallerOnly ? (
-          <InstallerPointsView
-            points={points}
-            equipment={equipment}
-            installChecks={installChecks}
-            issues={issues}
-            onSetInstallValue={setInstallValue}
-            onUpdatePointNotes={installerUpdatePointNotes}
-            onOpenIssues={(point) => setIssuesModalPointId(point.id)}
-          />
-        ) : showAttributesAdmin ? (
+        {showAttributesAdmin ? (
           <AttributesAdmin
             pointAttributes={pointAttributes}
             pointAttributeOptions={pointAttributeOptions}
@@ -690,8 +685,9 @@ export default function App() {
             pointAttributeValues={pointAttributeValues}
             onOpenIssues={(point) => setIssuesModalPointId(point.id)}
             onBack={() => setPrinting(false)}
+            installerView={isInstallerOnly}
           />
-        ) : showDashboard ? (
+        ) : !isInstallerOnly && showDashboard ? (
           <ProjectDashboard
             projectId={projectId}
             points={points}
@@ -721,10 +717,11 @@ export default function App() {
             pointAttributeValues={pointAttributeValues}
             onSetValue={setPointValue}
             onSetInstallValue={setInstallValue}
-            onUpdatePoint={updatePoint}
+            onUpdatePoint={isInstallerOnly ? installerUpdatePointNotes : updatePoint}
             onDeletePoint={deletePoint}
             onOpenIssues={(point) => setIssuesModalPointId(point.id)}
             onSetAttributeValue={setAttributeValue}
+            installerView={isInstallerOnly}
           />
         ) : (
           <PointsView
@@ -741,11 +738,12 @@ export default function App() {
             onBulkSetValues={bulkSetPoints}
             onSetInstallValue={setInstallValue}
             onBulkSetInstallValues={bulkSetInstallValues}
-            onUpdatePoint={updatePoint}
+            onUpdatePoint={isInstallerOnly ? installerUpdatePointNotes : updatePoint}
             onDeletePoint={deletePoint}
             onOpenIssues={(point) => setIssuesModalPointId(point.id)}
             onSetAttributeValue={setAttributeValue}
             onBulkSetAttributeValues={bulkSetAttributeValues}
+            installerView={isInstallerOnly}
           />
         )}
       </div>

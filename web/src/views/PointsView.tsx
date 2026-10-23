@@ -80,6 +80,7 @@ export function PointsView({
   onOpenIssues,
   onSetAttributeValue,
   onBulkSetAttributeValues,
+  installerView = false,
 }: {
   projectId: string;
   points: Point[];
@@ -99,6 +100,9 @@ export function PointsView({
   onOpenIssues: (point: Point) => void;
   onSetAttributeValue: (pointId: string, attributeId: string, value: string) => void;
   onBulkSetAttributeValues: (updates: { point_id: string; point_attribute_id: string; value: string }[]) => void;
+  // Same restriction PointsCardList.tsx applies for a field installer: no
+  // Commissioning checklist, no deleting a point, everything else as-is.
+  installerView?: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const clipboardRef = useRef<CheckState[][] | null>(null);
@@ -110,7 +114,7 @@ export function PointsView({
   const [installStatusFilter, setInstallStatusFilter] = useState<InstallStatus | "">("");
   const [search, setSearch] = useState("");
   const [showInstall, setShowInstall] = useState(true);
-  const [showCommissioning, setShowCommissioning] = useState(true);
+  const [showCommissioning, setShowCommissioning] = useState(!installerView);
   const [showAttributes, setShowAttributes] = useState(true);
 
   const installChecksByPointId = useMemo(
@@ -468,14 +472,16 @@ export function PointsView({
             <input type="checkbox" checked={showInstall} onChange={(e) => setShowInstall(e.target.checked)} />
             Install
           </label>
-          <label style={{ display: "flex", alignItems: "center", gap: 4 }}>
-            <input
-              type="checkbox"
-              checked={showCommissioning}
-              onChange={(e) => setShowCommissioning(e.target.checked)}
-            />
-            Commissioning
-          </label>
+          {!installerView && (
+            <label style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <input
+                type="checkbox"
+                checked={showCommissioning}
+                onChange={(e) => setShowCommissioning(e.target.checked)}
+              />
+              Commissioning
+            </label>
+          )}
           {projectAttrs.length > 0 && (
             <label style={{ display: "flex", alignItems: "center", gap: 4 }}>
               <input
@@ -877,15 +883,17 @@ export function PointsView({
                             )}
                           </td>
                           <td>
-                            <button
-                              type="button"
-                              className="icon-btn"
-                              title="Delete point"
-                              aria-label="Delete point"
-                              onClick={() => onDeletePoint(point)}
-                            >
-                              🗑
-                            </button>
+                            {!installerView && (
+                              <button
+                                type="button"
+                                className="icon-btn"
+                                title="Delete point"
+                                aria-label="Delete point"
+                                onClick={() => onDeletePoint(point)}
+                              >
+                                🗑
+                              </button>
+                            )}
                           </td>
                         </tr>
                       );

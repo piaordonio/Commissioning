@@ -742,15 +742,28 @@ picks one of two roles up front:
 A **field installer** is invited separately, from the "Installers" panel on
 each project's own Dashboard (not the account-wide "Manage Team" screen,
 and not admin-only — any project's owner can invite installers to it) —
-`project_installers`, scoped to that one project. An installer only gets a
-restricted shell (`InstallerPointsView.tsx`): the 7 Install fields, Notes,
-Blocked By, and the Issues log. No Commissioning checklist, no custom
-attributes, no project-admin actions (Delete/Reset/Import/Check Against
-Controller) — enforced by RLS and a handful of explicit checks added to the
-write RPCs that don't have row-level granularity to lean on (see
-`installer_update_point()` and the guards on `import_points()`/
-`bulk_set_points()`/`pair_reimported_point()`/`set_controller_status()` in
-`supabase/schema.sql`), not just by the UI omitting a button.
+`project_installers`, scoped to that one project. An installer gets the
+same points grid/card view as everyone else, with exactly two things taken
+away: the **Commissioning checklist** (the 7 `CHECK_FIELDS`, the
+Commissioning status/progress pills, the Date Commissioned column, and the
+Commissioning mode of Print Report — the `CHECK_FIELDS`/Commissioning-mode
+toggle is simply never shown, same `showCommissioning` state the regular
+Columns toggle already uses, just defaulted off and hidden rather than
+left switchable) and **deleting a point**. Everything else — Install
+fields, custom attribute values, Notes, Blocked By, the Issues log, the
+Install/Issues modes of Print Report — is fully visible and editable, the
+same as an owner. No Dashboard and no other project-admin actions
+(Delete Project/Import/Check Against Controller/Manage Attributes), those
+stay owner/admin-only. Enforced by RLS, not just the UI hiding controls:
+there's no write policy on `points` for an installer at all (so even the
+Commissioning fields, technically readable as plain columns on a row they
+can already SELECT, can never be written by them — editing routes through
+`installer_update_point()` for Notes/Blocked By specifically, since
+Postgres RLS can't restrict individual columns), and
+`point_attribute_values`/`point_attribute_projects` each got narrow
+installer-scoped select/insert/update policies added alongside the
+existing owner/admin ones — deliberately no installer DELETE policy on
+either, matching "don't allow deleting" points.
 
 All three invite kinds share the same pending-by-username shape: the row
 sits pending (`project_installers.user_id` null, or the row simply existing

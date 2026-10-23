@@ -56,6 +56,7 @@ export function PointsCardList({
   onDeletePoint,
   onOpenIssues,
   onSetAttributeValue,
+  installerView = false,
 }: {
   projectId: string;
   points: Point[];
@@ -72,6 +73,14 @@ export function PointsCardList({
   onDeletePoint: (point: Point) => void;
   onOpenIssues: (point: Point) => void;
   onSetAttributeValue: (pointId: string, attributeId: string, value: string) => void;
+  // A field installer gets this same card layout, not a separate one --
+  // everything here is in their capability list except the Commissioning
+  // checklist and deleting a point. RLS already blocks both server-side
+  // (no installer write policy on points at all, and no Commissioning
+  // columns' values would do anything since bulk_set_points()/direct point
+  // writes are owner/admin-only) -- this just doesn't show controls that
+  // wouldn't work, same reasoning the rest of this app already follows.
+  installerView?: boolean;
 }) {
   const [showRemoved, setShowRemoved] = useState(false);
   const [panelFilter, setPanelFilter] = useState("");
@@ -79,7 +88,7 @@ export function PointsCardList({
   const [installStatusFilter, setInstallStatusFilter] = useState<InstallStatus | "">("");
   const [search, setSearch] = useState("");
   const [showInstall, setShowInstall] = useState(true);
-  const [showCommissioning, setShowCommissioning] = useState(true);
+  const [showCommissioning, setShowCommissioning] = useState(!installerView);
   // Collapsed by default, same reasoning as the header's Actions toggle and
   // each point card -- the filters aren't needed to check off a point
   // you've already found, only to narrow the list down to it.
@@ -167,14 +176,16 @@ export function PointsCardList({
               <input type="checkbox" checked={showInstall} onChange={(e) => setShowInstall(e.target.checked)} />
               Install
             </label>
-            <label className="mobile-checkbox-row">
-              <input
-                type="checkbox"
-                checked={showCommissioning}
-                onChange={(e) => setShowCommissioning(e.target.checked)}
-              />
-              Commissioning
-            </label>
+            {!installerView && (
+              <label className="mobile-checkbox-row">
+                <input
+                  type="checkbox"
+                  checked={showCommissioning}
+                  onChange={(e) => setShowCommissioning(e.target.checked)}
+                />
+                Commissioning
+              </label>
+            )}
           </div>
           <select value={panelFilter} onChange={(e) => setPanelFilter(e.target.value)}>
             <option value="">All Panels</option>
@@ -271,14 +282,16 @@ export function PointsCardList({
                           <span className="mono">{resolvedPointNumber(point)}</span>
                           <span className="muted-text">{displayPanel(point.panel)}</span>
                         </div>
-                        <button
-                          type="button"
-                          className="icon-btn"
-                          aria-label="Delete point"
-                          onClick={() => onDeletePoint(point)}
-                        >
-                          🗑
-                        </button>
+                        {!installerView && (
+                          <button
+                            type="button"
+                            className="icon-btn"
+                            aria-label="Delete point"
+                            onClick={() => onDeletePoint(point)}
+                          >
+                            🗑
+                          </button>
+                        )}
                       </div>
 
                       <button
