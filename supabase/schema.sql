@@ -407,6 +407,78 @@ create trigger trg_activate_admin_invites
   after insert on auth.users
   for each row execute function activate_pending_admin_invites();
 
+-- A plain teammate invite -- same pending-by-username shape as
+-- project_installers/pending_admins, but grants no special role at all:
+-- signing up with an invited username is simply let through, and from
+-- there that account owns whatever projects it creates, same as any other
+-- tech/designer account. Exists only because signup is no longer open (see
+-- reject_uninvited_signup() below) -- without this table, there'd be no way
+-- to let a new, ordinary teammate in at all, only installers and admins.
+create table if not exists pending_teammates (
+  email text primary key,
+  invited_by uuid references auth.users(id) default auth.uid(),
+  created_at timestamptz not null default now()
+);
+
+-- Unlike the other two activation triggers, there's no role to grant here --
+-- a successful signup against a matching invite *is* the whole fulfillment,
+-- so this just consumes the invite. Still security definer + a pinned
+-- search_path for the same reason as the others: supabase_auth_admin has no
+-- grants on public.pending_teammates.
+create or replace function activate_pending_teammate_invites()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  delete from pending_teammates where email = new.email;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_activate_teammate_invites on auth.users;
+create trigger trg_activate_teammate_invites
+  after insert on auth.users
+  for each row execute function activate_pending_teammate_invites();
+
+-- Closes the open-signup hole: every account from here on must have been
+-- invited first, as an installer (to a specific project), an admin, or a
+-- plain teammate -- there's no longer a way to create an account nobody
+-- asked for. Fires before the three activation triggers above (BEFORE vs.
+-- AFTER insert), so an uninvited signup is rejected outright rather than
+-- created and left permission-less. security definer + a pinned
+-- search_path for the same reason as every other trigger here.
+create or replace function reject_uninvited_signup()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  -- Bootstrap escape hatch: with zero admins in the system yet, there's no
+  -- one who could have sent an invite at all, so the very first signup is
+  -- let through unconditionally. Immediately self-closing after that --
+  -- the next signup needs a real invite like everyone else's. (It still
+  -- needs `insert into admin_users (user_id) values (...)` run by hand
+  -- afterward to actually become an admin -- this only stops it from being
+  -- rejected outright.)
+  if exists (select 1 from admin_users) then
+    if not exists (select 1 from project_installers where email = new.email and user_id is null)
+       and not exists (select 1 from pending_admins where email = new.email)
+       and not exists (select 1 from pending_teammates where email = new.email) then
+      raise exception 'This app is invite-only. Ask your project manager to invite your username first.';
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_reject_uninvited_signup on auth.users;
+create trigger trg_reject_uninvited_signup
+  before insert on auth.users
+  for each row execute function reject_uninvited_signup();
+
 -- ---- Keep updated_at current on every UPDATE, regardless of caller ----
 
 create or replace function set_updated_at()
@@ -1113,6 +1185,7 @@ alter table point_attribute_values enable row level security;
 alter table admin_users enable row level security;
 alter table project_installers enable row level security;
 alter table pending_admins enable row level security;
+alter table pending_teammates enable row level security;
 
 -- projects
 drop policy if exists "anon full access" on projects;
@@ -1307,6 +1380,13 @@ create policy "owner or admin revokes" on project_installers for delete using (
 -- own comment above).
 drop policy if exists "admin only" on pending_admins;
 create policy "admin only" on pending_admins for all using (is_admin(auth.uid())) with check (is_admin(auth.uid()));
+
+-- pending_teammates -- same reasoning and restriction as pending_admins:
+-- only an existing admin can see, create, or revoke a plain teammate
+-- invite, since deciding who gets an account at all is account-wide, not
+-- scoped to one project the way installer invites are.
+drop policy if exists "admin only" on pending_teammates;
+create policy "admin only" on pending_teammates for all using (is_admin(auth.uid())) with check (is_admin(auth.uid()));
 
 -- anon is deliberately left off every grant below now that there's a real
 -- login -- these are only ever called by a signed-in user.

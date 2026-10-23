@@ -4,7 +4,7 @@ import { api } from "./api";
 import { supabase } from "./supabaseClient";
 import { AuthScreen } from "./components/AuthScreen";
 import { Modal } from "./components/Modal";
-import { ManageAdminsModal } from "./components/ManageAdminsModal";
+import { ManageTeamModal } from "./components/ManageTeamModal";
 import { ImportMdbModal } from "./components/ImportMdbModal";
 import { VerifyControllerModal } from "./components/VerifyControllerModal";
 import { PointsReport } from "./components/PointsReport";
@@ -33,6 +33,7 @@ import {
   PointAttributeProject,
   PointAttributeValue,
   PendingAdmin,
+  PendingTeammate,
   Project,
   ProjectInstaller,
 } from "./types";
@@ -78,13 +79,16 @@ export default function App() {
   // RLS already returns nothing for a non-admin, but there's no reason to
   // even ask.
   const [pendingAdmins, setPendingAdmins] = useState<PendingAdmin[]>([]);
+  const [pendingTeammates, setPendingTeammates] = useState<PendingTeammate[]>([]);
   const [showManageAdmins, setShowManageAdmins] = useState(false);
   useEffect(() => {
     if (!isAdmin) {
       setPendingAdmins([]);
+      setPendingTeammates([]);
       return;
     }
     api.listPendingAdmins<PendingAdmin>().then(setPendingAdmins).catch(() => {});
+    api.listPendingTeammates<PendingTeammate>().then(setPendingTeammates).catch(() => {});
   }, [isAdmin]);
 
   const inviteAdmin = async (email: string): Promise<void> => {
@@ -95,6 +99,16 @@ export default function App() {
   const revokeAdminInvite = (email: string) => {
     setPendingAdmins((list) => list.filter((p) => p.email !== email));
     api.revokeAdminInvite(email).catch(() => {});
+  };
+
+  const inviteTeammate = async (email: string): Promise<void> => {
+    const created = await api.inviteTeammate<PendingTeammate>(email);
+    setPendingTeammates((list) => [...list, created]);
+  };
+
+  const revokeTeammateInvite = (email: string) => {
+    setPendingTeammates((list) => list.filter((p) => p.email !== email));
+    api.revokeTeammateInvite(email).catch(() => {});
   };
 
   const [projects, setProjects] = useState<Project[]>([]);
@@ -572,7 +586,7 @@ export default function App() {
             anyone else who clicked it). */}
         {isAdmin && (
           <button type="button" className="btn-secondary" onClick={() => setShowManageAdmins(true)}>
-            Manage Project Managers
+            Manage Team
           </button>
         )}
         <button type="button" className="btn-secondary" onClick={() => supabase.auth.signOut()}>
@@ -720,8 +734,15 @@ export default function App() {
       </div>
 
       {showManageAdmins && (
-        <Modal title="Manage Project Managers" onClose={() => setShowManageAdmins(false)}>
-          <ManageAdminsModal pendingAdmins={pendingAdmins} onInvite={inviteAdmin} onRevoke={revokeAdminInvite} />
+        <Modal title="Manage Team" onClose={() => setShowManageAdmins(false)}>
+          <ManageTeamModal
+            pendingAdmins={pendingAdmins}
+            pendingTeammates={pendingTeammates}
+            onInviteAdmin={inviteAdmin}
+            onInviteTeammate={inviteTeammate}
+            onRevokeAdmin={revokeAdminInvite}
+            onRevokeTeammate={revokeTeammateInvite}
+          />
         </Modal>
       )}
 

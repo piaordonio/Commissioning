@@ -106,6 +106,16 @@ export interface PendingAdmin {
   created_at: string;
 }
 
+// Same pending-by-username shape as PendingAdmin, but grants no special
+// role -- it just lets a username past the invite-only signup gate (see
+// reject_uninvited_signup() in supabase/schema.sql). From there that
+// account owns whatever projects it creates, same as any other account.
+export interface PendingTeammate {
+  email: string;
+  invited_by: string | null;
+  created_at: string;
+}
+
 export interface Equipment {
   id: string;
   project_id: string;

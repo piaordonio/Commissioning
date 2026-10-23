@@ -711,53 +711,58 @@ wants sign-in gated on an inbox anyway.
 Every table has Row Level Security enabled, and every policy requires a
 real login (`auth.uid() is not null`) one way or another — the anon key
 still ships in the client bundle (public by design in Supabase's model), it
-just no longer unlocks anything on its own. Three kinds of access from
-there:
+just no longer unlocks anything on its own.
 
-- **A project's owner** — whoever's logged-in account created it
-  (`projects.owner_id`, stamped from the request's JWT automatically,
-  `default auth.uid()`) — has full read/write on that project and
-  everything under it. Nothing else about the app changes for an owner;
-  this is the same experience it's always had, just scoped to your own
-  projects instead of shared with anyone holding the anon key.
-- **An admin** (a row in `admin_users`) sees and edits every project, not
-  just their own — "the same access as you" for a project manager, not
-  scoped to one project the way a field installer invite is. The very
-  first admin has to be bootstrapped by hand in the SQL Editor —
-  `insert into admin_users (user_id) values ('<your-auth-uid>');` — but
-  from then on, that admin can invite more from the header's "Manage
-  Project Managers" button: same pending-invite-by-username mechanism as
-  installers (`pending_admins`, activated by a trigger on `auth.users` the
-  moment that username signs up), just for the admin role instead of a
-  project assignment. Deliberately a narrower circle than installer
-  invites — only an existing admin can grant this, not any project owner,
-  since it hands out full-account access rather than access to one
-  project.
-- **A field installer** sees only the specific project(s) they're invited
-  to (`project_installers`, managed from the "Installers" panel on each
-  project's Dashboard — invite by username, revoke anytime), and only gets
-  a restricted shell (`InstallerPointsView.tsx`): the 7 Install fields,
-  Notes, Blocked By, and the Issues log. No Commissioning checklist, no
-  custom attributes, no project-admin actions (Delete/Reset/Import/Check
-  Against Controller) — enforced by RLS and a handful of explicit checks
-  added to the write RPCs that don't have row-level granularity to lean on
-  (see `installer_update_point()` and the guards on `import_points()`/
-  `bulk_set_points()`/`pair_reimported_point()`/`set_controller_status()`
-  in `supabase/schema.sql`), not just by the UI omitting a button.
-  Inviting someone by username works before they've ever signed up — the
-  invite sits pending (`project_installers.user_id` null) until that exact
-  username creates an account, at which point a trigger on `auth.users`
-  activates it automatically. That's also why sign-up is left open to
-  anyone rather than gated behind an invite code: an unsolicited sign-up
-  just gets an account with nothing assigned to it, inert until an owner
-  has already invited that username somewhere — which avoids this app
-  needing its first privileged server-side component (an Edge Function
-  with a service-role key) just to create accounts. The two `auth.users`
-  triggers (`activate_pending_installer_invites`, `activate_pending_admin_invites`)
-  both run `security definer` for the same reason: GoTrue creates users as
-  the `supabase_auth_admin` role, which has no grants on the `public`
-  schema, so without `security definer` every sign-up — not just invited
-  ones — would fail outright.
+**Sign-up is invite-only.** A `before insert on auth.users` trigger
+(`reject_uninvited_signup()`) rejects any username that hasn't already been
+invited somewhere — as a field installer on a specific project, as an
+admin, or as a plain teammate — with a clear error instead of silently
+creating a powerless account. There's one bootstrap exception: with zero
+rows in `admin_users` yet, the very first signup is let through
+unconditionally (there's no one who could have invited it), after which the
+gate closes immediately for everyone after. That first account still needs
+`insert into admin_users (user_id) values ('<your-auth-uid>');` run by hand
+in the SQL Editor to actually become an admin — the bootstrap exception
+only stops it from being rejected, same as before this change.
+
+From the header's "Manage Team" button (admin-only), inviting a username
+picks one of two roles up front:
+
+- **Admin** (`pending_admins` → `admin_users` once they sign up) sees and
+  edits every project, not just their own — "the same access as you."
+  Deliberately a narrower circle than the other two — only an existing
+  admin can grant this, since it hands out full-account access rather than
+  access to one project or an ordinary account.
+- **Teammate** (`pending_teammates`) grants no special role at all — it
+  just lets that username past the signup gate. From there it's an
+  ordinary tech/designer account: whoever's logged in owns whatever
+  projects they create (`projects.owner_id`, stamped from the request's
+  JWT automatically, `default auth.uid()`), and sees only their own.
+
+A **field installer** is invited separately, from the "Installers" panel on
+each project's own Dashboard (not the account-wide "Manage Team" screen,
+and not admin-only — any project's owner can invite installers to it) —
+`project_installers`, scoped to that one project. An installer only gets a
+restricted shell (`InstallerPointsView.tsx`): the 7 Install fields, Notes,
+Blocked By, and the Issues log. No Commissioning checklist, no custom
+attributes, no project-admin actions (Delete/Reset/Import/Check Against
+Controller) — enforced by RLS and a handful of explicit checks added to the
+write RPCs that don't have row-level granularity to lean on (see
+`installer_update_point()` and the guards on `import_points()`/
+`bulk_set_points()`/`pair_reimported_point()`/`set_controller_status()` in
+`supabase/schema.sql`), not just by the UI omitting a button.
+
+All three invite kinds share the same pending-by-username shape: the row
+sits pending (`project_installers.user_id` null, or the row simply existing
+for `pending_admins`/`pending_teammates`) until that exact username signs
+up, at which point a trigger on `auth.users` activates or consumes it
+automatically. The three activation triggers
+(`activate_pending_installer_invites`, `activate_pending_admin_invites`,
+`activate_pending_teammate_invites`) and the gate itself
+(`reject_uninvited_signup`) all run `security definer` for the same
+reason: GoTrue creates users as the `supabase_auth_admin` role, which has
+no grants on the `public` schema, so without `security definer` every
+sign-up — not just invited ones — would fail outright.
 
 ### Why five operations are Postgres functions, not plain inserts/updates
 

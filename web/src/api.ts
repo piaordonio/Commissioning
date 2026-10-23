@@ -246,6 +246,28 @@ export const api = {
     if (error) throw new Error(error.message);
   },
 
+  // Plain teammate invites -- see pending_teammates/activate_pending_teammate_invites()
+  // in supabase/schema.sql. Grants no role; just lets a username past the
+  // invite-only signup gate. Same admin-only RLS shape as pending_admins.
+  listPendingTeammates: async <T>(): Promise<T[]> => {
+    const { data, error } = await supabase.from("pending_teammates").select("*");
+    return assertNoError(data as T[] | null, error);
+  },
+
+  inviteTeammate: async <T>(username: string): Promise<T> => {
+    const { data, error } = await supabase
+      .from("pending_teammates")
+      .insert({ email: toLoginEmail(username) })
+      .select()
+      .single();
+    return assertNoError(data as T | null, error);
+  },
+
+  revokeTeammateInvite: async (email: string): Promise<void> => {
+    const { error } = await supabase.from("pending_teammates").delete().eq("email", email);
+    if (error) throw new Error(error.message);
+  },
+
   // Also one transaction server-side (import_points in supabase/schema.sql):
   // either every equipment/point row from the parsed import lands, or none
   // do. Non-destructive: matches existing equipment (by tag) and points (by
