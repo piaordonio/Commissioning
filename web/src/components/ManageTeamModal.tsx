@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { PendingAdmin, PendingTeammate } from "../types";
+import { InviteResult, PendingAdmin, PendingTeammate } from "../types";
 import { fromLoginEmail } from "../username";
 
 type Role = "admin" | "teammate";
@@ -25,8 +25,8 @@ export function ManageTeamModal({
 }: {
   pendingAdmins: PendingAdmin[];
   pendingTeammates: PendingTeammate[];
-  onInviteAdmin: (username: string) => Promise<void>;
-  onInviteTeammate: (username: string) => Promise<void>;
+  onInviteAdmin: (username: string) => Promise<InviteResult>;
+  onInviteTeammate: (username: string) => Promise<InviteResult>;
   onRevokeAdmin: (email: string) => void;
   onRevokeTeammate: (email: string) => void;
 }) {
@@ -34,14 +34,24 @@ export function ManageTeamModal({
   const [role, setRole] = useState<Role>("teammate");
   const [inviting, setInviting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!username.trim()) return;
     setInviting(true);
     setError(null);
+    setNotice(null);
     try {
-      await (role === "admin" ? onInviteAdmin(username.trim()) : onInviteTeammate(username.trim()));
+      const typedUsername = username.trim();
+      const result = await (role === "admin" ? onInviteAdmin(typedUsername) : onInviteTeammate(typedUsername));
+      if (result.activated) {
+        setNotice(
+          role === "admin"
+            ? `${typedUsername} already had an account — granted admin access immediately.`
+            : `${typedUsername} already had an account — nothing further to do, they can already sign in.`
+        );
+      }
       setUsername("");
     } catch (err: any) {
       setError(err.message ?? "Failed to invite");
@@ -81,6 +91,7 @@ export function ManageTeamModal({
         </button>
       </form>
       {error && <div className="error-banner">{error}</div>}
+      {notice && <div className="muted-text">{notice}</div>}
       {rows.length === 0 ? (
         <div className="muted-text">No pending invites.</div>
       ) : (

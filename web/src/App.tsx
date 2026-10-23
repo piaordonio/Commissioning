@@ -25,6 +25,7 @@ import {
   Equipment,
   InstallCheck,
   InstallField,
+  InviteResult,
   Issue,
   IssueStatus,
   Point,
@@ -91,9 +92,15 @@ export default function App() {
     api.listPendingTeammates<PendingTeammate>().then(setPendingTeammates).catch(() => {});
   }, [isAdmin]);
 
-  const inviteAdmin = async (email: string): Promise<void> => {
-    const created = await api.inviteAdmin<PendingAdmin>(email);
-    setPendingAdmins((list) => [...list, created]);
+  const inviteAdmin = async (email: string): Promise<InviteResult> => {
+    const result = await api.inviteAdmin(email);
+    if (!result.activated) {
+      setPendingAdmins((list) => [
+        ...list,
+        { email: result.email, invited_by: result.invited_by ?? null, created_at: result.created_at ?? "" },
+      ]);
+    }
+    return result;
   };
 
   const revokeAdminInvite = (email: string) => {
@@ -101,9 +108,15 @@ export default function App() {
     api.revokeAdminInvite(email).catch(() => {});
   };
 
-  const inviteTeammate = async (email: string): Promise<void> => {
-    const created = await api.inviteTeammate<PendingTeammate>(email);
-    setPendingTeammates((list) => [...list, created]);
+  const inviteTeammate = async (email: string): Promise<InviteResult> => {
+    const result = await api.inviteTeammate(email);
+    if (!result.activated) {
+      setPendingTeammates((list) => [
+        ...list,
+        { email: result.email, invited_by: result.invited_by ?? null, created_at: result.created_at ?? "" },
+      ]);
+    }
+    return result;
   };
 
   const revokeTeammateInvite = (email: string) => {
@@ -306,8 +319,12 @@ export default function App() {
   // setters above), since a failed invite (bad email, already invited) needs
   // to surface in that form rather than silently appear to have worked.
   const inviteInstaller = async (email: string): Promise<void> => {
+    // invite_installer() upserts (see supabase/schema.sql) -- re-inviting an
+    // already-invited email (e.g. to backfill user_id for an account that
+    // didn't exist yet the first time) updates the existing row rather than
+    // erroring, so replace rather than append to avoid a duplicate in the list.
     const created = await api.inviteInstaller<ProjectInstaller>(projectId, email);
-    setProjectInstallers((list) => [...list, created]);
+    setProjectInstallers((list) => [...list.filter((pi) => pi.email !== created.email), created]);
   };
 
   const revokeInstaller = (email: string) => {

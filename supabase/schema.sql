@@ -349,6 +349,45 @@ create trigger trg_activate_installer_invites
   after insert on auth.users
   for each row execute function activate_pending_installer_invites();
 
+-- The actual write path behind "Add Installer" in the UI -- a plain insert
+-- into project_installers would leave an already-existing account's invite
+-- permanently pending, since the trigger above only fires for a BRAND NEW
+-- auth.users row (i.e. only works if the invite happens before that person
+-- ever signs up). Most installers will be invited before they exist, but
+-- not all -- someone who already has an account (signed up during testing,
+-- or as a teammate, before being invited here) needs the same invite to
+-- take effect immediately instead of silently doing nothing. security
+-- definer (+ pinned search_path) both to read auth.users (no grants there
+-- otherwise) and for the same authorization-guard reason as
+-- import_points()/bulk_set_points() below -- callable directly against the
+-- REST endpoint regardless of whether the UI offers a button for it.
+create or replace function invite_installer(p_project_id uuid, p_email text)
+returns project_installers
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_user_id uuid;
+  v_row project_installers;
+begin
+  if not (is_admin(auth.uid()) or exists (select 1 from projects where id = p_project_id and owner_id = auth.uid())) then
+    raise exception 'Not authorized to invite installers to this project';
+  end if;
+
+  select id into v_user_id from auth.users where email = p_email;
+
+  insert into project_installers (project_id, email, user_id)
+  values (p_project_id, p_email, v_user_id)
+  on conflict (project_id, email) do update set user_id = excluded.user_id
+  returning * into v_row;
+
+  return v_row;
+end;
+$$;
+
+grant execute on function invite_installer(uuid, text) to authenticated;
+
 -- The one write an installer needs on `points` itself (Notes/Blocked By).
 -- Postgres RLS is row-level, not column-level -- there's no policy clause
 -- that lets an installer UPDATE a point but only touch two of its columns
@@ -416,6 +455,46 @@ create trigger trg_activate_admin_invites
   after insert on auth.users
   for each row execute function activate_pending_admin_invites();
 
+-- The actual write path behind "Manage Team" > Invite (role: Admin) --
+-- same reason as invite_installer() above: a plain insert into
+-- pending_admins would leave an already-existing username's invite
+-- permanently pending, since activate_pending_admin_invites() only fires
+-- on a brand new auth.users row. If that username already has an account,
+-- grant admin_users directly, right now, instead of a pending row nothing
+-- will ever consume.
+create or replace function invite_admin(p_email text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_user_id uuid;
+  v_row pending_admins;
+begin
+  if not is_admin(auth.uid()) then
+    raise exception 'Not authorized to invite admins';
+  end if;
+
+  select id into v_user_id from auth.users where email = p_email;
+
+  if v_user_id is not null then
+    insert into admin_users (user_id) values (v_user_id) on conflict do nothing;
+    return jsonb_build_object('activated', true, 'email', p_email);
+  end if;
+
+  insert into pending_admins (email) values (p_email)
+    on conflict (email) do nothing
+    returning * into v_row;
+  if v_row is null then
+    select * into v_row from pending_admins where email = p_email;
+  end if;
+  return jsonb_build_object('activated', false, 'email', v_row.email, 'invited_by', v_row.invited_by, 'created_at', v_row.created_at);
+end;
+$$;
+
+grant execute on function invite_admin(text) to authenticated;
+
 -- A plain teammate invite -- same pending-by-username shape as
 -- project_installers/pending_admins, but grants no special role at all:
 -- signing up with an invited username is simply let through, and from
@@ -450,6 +529,44 @@ drop trigger if exists trg_activate_teammate_invites on auth.users;
 create trigger trg_activate_teammate_invites
   after insert on auth.users
   for each row execute function activate_pending_teammate_invites();
+
+-- The actual write path behind "Manage Team" > Invite (role: Teammate) --
+-- if that username already has an account, it already passed the signup
+-- gate (reject_uninvited_signup() below only runs at signup time), so
+-- there's nothing left to grant or activate; a pending_teammates row would
+-- just sit there forever with nothing to consume it. Only inserts one when
+-- the username doesn't exist yet.
+create or replace function invite_teammate(p_email text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_user_id uuid;
+  v_row pending_teammates;
+begin
+  if not is_admin(auth.uid()) then
+    raise exception 'Not authorized to invite teammates';
+  end if;
+
+  select id into v_user_id from auth.users where email = p_email;
+
+  if v_user_id is not null then
+    return jsonb_build_object('activated', true, 'email', p_email);
+  end if;
+
+  insert into pending_teammates (email) values (p_email)
+    on conflict (email) do nothing
+    returning * into v_row;
+  if v_row is null then
+    select * into v_row from pending_teammates where email = p_email;
+  end if;
+  return jsonb_build_object('activated', false, 'email', v_row.email, 'invited_by', v_row.invited_by, 'created_at', v_row.created_at);
+end;
+$$;
+
+grant execute on function invite_teammate(text) to authenticated;
 
 -- Closes the open-signup hole: every account from here on must have been
 -- invited first, as an installer (to a specific project), an admin, or a

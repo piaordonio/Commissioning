@@ -1,7 +1,7 @@
 import { supabase } from "./supabaseClient";
 import { ImportEquipmentDraft, ImportPointDraft } from "./mdbImport";
 import { ControllerPointRow } from "./controllerImport";
-import { Equipment, Point } from "./types";
+import { Equipment, InviteResult, Point } from "./types";
 import { toLoginEmail } from "./username";
 
 type ListTable = "projects" | "equipment" | "point_attributes" | "point_attribute_options" | "point_attribute_projects";
@@ -203,18 +203,18 @@ export const api = {
     return assertNoError(data as T[] | null, error);
   },
 
-  // Inserts a pending (user_id null) invite -- activated the moment that
-  // username signs up, see activate_pending_installer_invites() in
-  // supabase/schema.sql. Stores the same synthetic address signInWithPassword/
-  // signUp use (see ../username.ts) so the match on auth.users.email lines up.
-  // Plain insert, no RPC needed: this is a single-row write with no
-  // multi-statement atomicity concern the way import/bulk-set have.
+  // invite_installer() in supabase/schema.sql, not a plain insert: if that
+  // username already has an account (signed up before being invited, or as
+  // a teammate), this backfills user_id immediately instead of leaving the
+  // invite permanently pending -- activate_pending_installer_invites()
+  // only ever fires for a brand-new signup. Stores the same synthetic
+  // address signInWithPassword/signUp use (see ../username.ts) so the
+  // match on auth.users.email lines up.
   inviteInstaller: async <T>(projectId: string, username: string): Promise<T> => {
-    const { data, error } = await supabase
-      .from("project_installers")
-      .insert({ project_id: projectId, email: toLoginEmail(username) })
-      .select()
-      .single();
+    const { data, error } = await supabase.rpc("invite_installer", {
+      p_project_id: projectId,
+      p_email: toLoginEmail(username),
+    });
     return assertNoError(data as T | null, error);
   },
 
@@ -232,13 +232,13 @@ export const api = {
     return assertNoError(data as T[] | null, error);
   },
 
-  inviteAdmin: async <T>(username: string): Promise<T> => {
-    const { data, error } = await supabase
-      .from("pending_admins")
-      .insert({ email: toLoginEmail(username) })
-      .select()
-      .single();
-    return assertNoError(data as T | null, error);
+  // invite_admin() in supabase/schema.sql, not a plain insert: if that
+  // username already has an account, this grants admin_users directly and
+  // returns { activated: true } instead of a pending row nothing would
+  // ever consume (activate_pending_admin_invites() only fires on signup).
+  inviteAdmin: async (username: string): Promise<InviteResult> => {
+    const { data, error } = await supabase.rpc("invite_admin", { p_email: toLoginEmail(username) });
+    return assertNoError(data as InviteResult | null, error);
   },
 
   revokeAdminInvite: async (email: string): Promise<void> => {
@@ -254,13 +254,13 @@ export const api = {
     return assertNoError(data as T[] | null, error);
   },
 
-  inviteTeammate: async <T>(username: string): Promise<T> => {
-    const { data, error } = await supabase
-      .from("pending_teammates")
-      .insert({ email: toLoginEmail(username) })
-      .select()
-      .single();
-    return assertNoError(data as T | null, error);
+  // invite_teammate() in supabase/schema.sql, not a plain insert: if that
+  // username already has an account, it already passed the signup gate, so
+  // there's nothing to grant -- returns { activated: true } and skips the
+  // insert entirely instead of leaving a pending row nothing will consume.
+  inviteTeammate: async (username: string): Promise<InviteResult> => {
+    const { data, error } = await supabase.rpc("invite_teammate", { p_email: toLoginEmail(username) });
+    return assertNoError(data as InviteResult | null, error);
   },
 
   revokeTeammateInvite: async (email: string): Promise<void> => {

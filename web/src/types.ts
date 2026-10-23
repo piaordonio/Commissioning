@@ -116,6 +116,16 @@ export interface PendingTeammate {
   created_at: string;
 }
 
+// Result of invite_admin()/invite_teammate() (see supabase/schema.sql):
+// when the invited username already has an account, there's no pending row
+// to show -- activated is true and the other fields are absent.
+export interface InviteResult {
+  activated: boolean;
+  email: string;
+  invited_by?: string | null;
+  created_at?: string;
+}
+
 export interface Equipment {
   id: string;
   project_id: string;
