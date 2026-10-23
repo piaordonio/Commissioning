@@ -10,8 +10,6 @@ import {
   InstallCheck,
   InstallField,
   Issue,
-  PhysicalEquipment,
-  PhysicalEquipmentField,
   Point,
   PointAttribute,
   PointAttributeOption,
@@ -34,7 +32,6 @@ import { SYMBOL, nextCheckState } from "../checklistCycle";
 import { usePointRows } from "../usePointRows";
 import { buildOpenIssueCountByEquipment, groupIssuesByPointId, openIssueCount } from "../issues";
 import { attributesForProject, buildAttributeValueMap, getAttributeValue, optionsForAttribute, isAttrValueNA, ATTR_NA_DISPLAY } from "../pointAttributes";
-import { PhysicalEquipmentChecklist } from "../components/PhysicalEquipmentChecklist";
 
 const BODY_FONT = '13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
 const HEADER_FONT = '600 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
@@ -68,7 +65,6 @@ export function PointsView({
   projectId,
   points,
   equipment,
-  physicalEquipment,
   installChecks,
   issues,
   pointAttributes,
@@ -84,15 +80,11 @@ export function PointsView({
   onOpenIssues,
   onSetAttributeValue,
   onBulkSetAttributeValues,
-  onSetPhysicalEquipmentCheck,
-  onCreatePhysicalEquipment,
-  onDeletePhysicalEquipment,
   installerView = false,
 }: {
   projectId: string;
   points: Point[];
   equipment: Equipment[];
-  physicalEquipment: PhysicalEquipment[];
   installChecks: InstallCheck[];
   issues: Issue[];
   pointAttributes: PointAttribute[];
@@ -108,9 +100,6 @@ export function PointsView({
   onOpenIssues: (point: Point) => void;
   onSetAttributeValue: (pointId: string, attributeId: string, value: string) => void;
   onBulkSetAttributeValues: (updates: { point_id: string; point_attribute_id: string; value: string }[]) => void;
-  onSetPhysicalEquipmentCheck: (id: string, field: PhysicalEquipmentField, value: CheckState) => void;
-  onCreatePhysicalEquipment?: (equipmentId: string, name: string) => Promise<void>;
-  onDeletePhysicalEquipment?: (id: string) => void;
   // Same restriction PointsCardList.tsx applies for a field installer: no
   // Commissioning checklist, no deleting a point, everything else as-is.
   installerView?: boolean;
@@ -133,15 +122,6 @@ export function PointsView({
     [installChecks]
   );
   const issuesByPointId = useMemo(() => groupIssuesByPointId(issues), [issues]);
-  const physicalEquipmentByEquipmentId = useMemo(() => {
-    const map = new Map<string, PhysicalEquipment[]>();
-    for (const pe of physicalEquipment) {
-      const list = map.get(pe.equipment_id);
-      if (list) list.push(pe);
-      else map.set(pe.equipment_id, [pe]);
-    }
-    return map;
-  }, [physicalEquipment]);
 
   // Boolean-type attributes join the Cell/selection engine below as the
   // "attributes" group (full click-to-cycle/shift-click/bulk-fill/paste);
@@ -711,22 +691,6 @@ export function PointsView({
                             </span>
                           </>
                         )}
-                      </td>
-                    </tr>
-                    <tr className="table-group-subheader">
-                      <td colSpan={3 + visibleFieldCols + 4}>
-                        <PhysicalEquipmentChecklist
-                          items={physicalEquipmentByEquipmentId.get(g.equipmentId) ?? []}
-                          points={g.items}
-                          installerView={installerView}
-                          onSetCheck={onSetPhysicalEquipmentCheck}
-                          onCreate={
-                            installerView || !onCreatePhysicalEquipment
-                              ? undefined
-                              : (name) => onCreatePhysicalEquipment(g.equipmentId, name)
-                          }
-                          onDelete={installerView ? undefined : onDeletePhysicalEquipment}
-                        />
                       </td>
                     </tr>
                     {g.items.map((point) => {

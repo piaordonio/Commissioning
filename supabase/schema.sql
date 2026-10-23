@@ -122,26 +122,27 @@ create table if not exists install_checks (
 -- nothing requires it to go.
 alter table install_checks add column if not exists notes text not null default '';
 
--- A prerequisite gate on the point-level Install checklist above, not a
--- replacement for it: one equipment/controller row commonly serves 2-3
--- separate physical units (a supply fan, a heating coil), each needing its
--- own Space Ready/Equipment Installed/Ducted-Piped sign-off before piping
--- or pulling wire to its points can start. Manually created per equipment
--- (there's nothing in an Access export to import these from), never
--- touched by import_points() or reconciliation -- equipment is never
--- hard-deleted on re-import (see equipment.active above), so these rows
--- just ride along unaffected.
-create table if not exists physical_equipment (
-  id uuid primary key default gen_random_uuid(),
-  equipment_id uuid not null references equipment(id) on delete cascade,
-  name text not null,
-  space_ready text not null default '' check (space_ready in ('', 'check', 'x', 'na')),
-  equipment_installed text not null default '' check (equipment_installed in ('', 'check', 'x', 'na')),
-  ducted_piped text not null default '' check (ducted_piped in ('', 'check', 'x', 'na')),
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-create index if not exists idx_physical_equipment_equipment on physical_equipment(equipment_id);
+-- Superseded by the 3 columns added to install_checks directly below --
+-- creating a named physical-equipment entry per controller turned out to
+-- be more hand-entry overhead than it was worth; these 3 checks belong on
+-- the per-point Install checklist instead, where the existing grid's
+-- click-to-cycle/shift-select/copy-paste/type-to-fill already handles bulk
+-- entry across many points at once. Unconditional drop (not an
+-- if-this-was-ever-created guard): this table only ever existed for the
+-- single release cycle between the two, so there's no real historical data
+-- to preserve on a database that already ran that version.
+drop table if exists physical_equipment cascade;
+
+-- The prerequisite checks that gate the rest of the Install checklist
+-- below -- a tech shouldn't be piping/pulling wire to a point before its
+-- space is ready and its equipment is actually installed. Plain columns on
+-- install_checks, not a separate table: same per-point grain as every
+-- other Install field, which gets them the exact same grid behavior
+-- (click-to-cycle, shift-select, Ctrl+C/V, type c/x/n/0 to bulk-fill) for
+-- free -- see INSTALL_FIELDS in web/src/types.ts, which lists these first.
+alter table install_checks add column if not exists space_ready text not null default '' check (space_ready in ('', 'check', 'x', 'na'));
+alter table install_checks add column if not exists equipment_installed text not null default '' check (equipment_installed in ('', 'check', 'x', 'na'));
+alter table install_checks add column if not exists ducted_piped text not null default '' check (ducted_piped in ('', 'check', 'x', 'na'));
 
 -- Structured, multi-entry issue log per point -- additive to (and
 -- independent of) the existing points.blocked_by free-text field, which
@@ -448,46 +449,12 @@ begin
 end;
 $$;
 
--- Same reasoning as installer_update_point() above, for physical_equipment's
--- 3 checklist fields: an installer needs to set these (that's the entire
--- point of the table), but not rename or delete a physical equipment row,
--- and RLS can't express "these 3 columns only" on one row. p_field is
--- validated against an allowlist before being used in dynamic SQL -- same
--- pattern bulk_set_points()/bulk_set_install_checks() below already use for
--- the same reason (an unvalidated column name here would be a SQL
--- injection vector). security definer (+ pinned search_path), same
--- non-optional reason as installer_update_point() -- physical_equipment
--- has no installer write policy at all, so without this the UPDATE below
--- silently affects 0 rows under RLS.
-create or replace function installer_set_physical_equipment_check(p_id uuid, p_field text, p_value text)
-returns void
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  v_project_id uuid;
-begin
-  if p_field not in ('space_ready', 'equipment_installed', 'ducted_piped') then
-    raise exception 'Invalid field: %', p_field;
-  end if;
-  if p_value not in ('', 'check', 'x', 'na') then
-    raise exception 'Invalid value: %', p_value;
-  end if;
-
-  select e.project_id into v_project_id
-    from physical_equipment pe join equipment e on e.id = pe.equipment_id
-    where pe.id = p_id;
-
-  if v_project_id is null or not is_installer_on(v_project_id) then
-    raise exception 'Not authorized to update this equipment';
-  end if;
-
-  execute format('update physical_equipment set %I = $1 where id = $2', p_field) using p_value, p_id;
-end;
-$$;
-
-grant execute on function installer_set_physical_equipment_check(uuid, text, text) to authenticated;
+-- Superseded along with physical_equipment above -- space_ready/
+-- equipment_installed/ducted_piped are now plain install_checks columns,
+-- so an installer sets them through the same path as every other Install
+-- field (install_checks has a broad installer select/update policy
+-- already, below -- no dedicated RPC needed).
+drop function if exists installer_set_physical_equipment_check(uuid, text, text);
 
 -- A rare, lightweight "same access as me" grant -- same pending-invite-by-
 -- email shape as project_installers above, but for the one cross-cutting
@@ -703,10 +670,6 @@ create trigger trg_points_updated_at before update on points
 
 drop trigger if exists trg_install_checks_updated_at on install_checks;
 create trigger trg_install_checks_updated_at before update on install_checks
-  for each row execute function set_updated_at();
-
-drop trigger if exists trg_physical_equipment_updated_at on physical_equipment;
-create trigger trg_physical_equipment_updated_at before update on physical_equipment
   for each row execute function set_updated_at();
 
 drop trigger if exists trg_issues_updated_at on issues;
@@ -1378,7 +1341,6 @@ $$;
 alter table projects enable row level security;
 alter table equipment enable row level security;
 alter table points enable row level security;
-alter table physical_equipment enable row level security;
 alter table install_checks enable row level security;
 alter table issues enable row level security;
 alter table point_attributes enable row level security;
@@ -1417,35 +1379,6 @@ create policy "write: owner or admin only" on equipment for all using (
   exists (select 1 from projects pr where pr.id = equipment.project_id and (pr.owner_id = auth.uid() or is_admin(auth.uid())))
 ) with check (
   exists (select 1 from projects pr where pr.id = equipment.project_id and (pr.owner_id = auth.uid() or is_admin(auth.uid())))
-);
-
--- physical_equipment -- select is broad (owner, admin, or assigned
--- installer, same as equipment/points), but write (create, rename, delete,
--- or set a checklist field directly) is owner/admin only -- an installer's
--- only way to set a checklist field is
--- installer_set_physical_equipment_check() above, which checks
--- is_installer_on() itself, same "RLS can't express 3-columns-only"
--- reasoning as installer_update_point().
-drop policy if exists "anon full access" on physical_equipment;
-drop policy if exists "select: owner, admin, or assigned installer" on physical_equipment;
-create policy "select: owner, admin, or assigned installer" on physical_equipment for select using (
-  exists (
-    select 1 from equipment e join projects pr on pr.id = e.project_id
-    where e.id = physical_equipment.equipment_id
-      and (pr.owner_id = auth.uid() or is_admin(auth.uid()) or is_installer_on(pr.id))
-  )
-);
-drop policy if exists "write: owner or admin only" on physical_equipment;
-create policy "write: owner or admin only" on physical_equipment for all using (
-  exists (
-    select 1 from equipment e join projects pr on pr.id = e.project_id
-    where e.id = physical_equipment.equipment_id and (pr.owner_id = auth.uid() or is_admin(auth.uid()))
-  )
-) with check (
-  exists (
-    select 1 from equipment e join projects pr on pr.id = e.project_id
-    where e.id = physical_equipment.equipment_id and (pr.owner_id = auth.uid() or is_admin(auth.uid()))
-  )
 );
 
 -- points -- no installer write policy at all (see installer_update_point()

@@ -1,7 +1,7 @@
 import { supabase } from "./supabaseClient";
 import { ImportEquipmentDraft, ImportPointDraft } from "./mdbImport";
 import { ControllerPointRow } from "./controllerImport";
-import { CheckState, Equipment, InviteResult, PhysicalEquipmentField, Point } from "./types";
+import { Equipment, InviteResult, Point } from "./types";
 import { toLoginEmail } from "./username";
 
 type ListTable = "projects" | "equipment" | "point_attributes" | "point_attribute_options" | "point_attribute_projects";
@@ -11,8 +11,7 @@ type WriteTable =
   | "points"
   | "issues"
   | "point_attributes"
-  | "point_attribute_options"
-  | "physical_equipment";
+  | "point_attribute_options";
 
 function assertNoError<T>(data: T | null, error: { message: string } | null): T {
   if (error) throw new Error(error.message);
@@ -93,14 +92,6 @@ export const api = {
   // ids the caller already has from listPoints(), one row per point (see
   // create_install_check_for_point() in supabase/schema.sql).
   listInstallChecks: async <T>(pointIds: string[]): Promise<T[]> => listByIdsInChunks<T>("install_checks", "point_id", pointIds),
-
-  // physical_equipment, like install_checks, carries no project_id --
-  // fetched by the equipment ids the caller already has from the
-  // "equipment" list. Zero or many rows per equipment (one controller can
-  // serve 2-3 separate physical units), unlike install_checks' exactly one
-  // row per point.
-  listPhysicalEquipment: async <T>(equipmentIds: string[]): Promise<T[]> =>
-    listByIdsInChunks<T>("physical_equipment", "equipment_id", equipmentIds),
 
   // issues, like install_checks, carry no project_id -- fetched by the
   // point ids the caller already has from listPoints(). Unlike
@@ -196,23 +187,6 @@ export const api = {
       p_point_id: pointId,
       p_notes: notes,
       p_blocked_by: blockedBy,
-    });
-    if (error) throw new Error(error.message);
-  },
-
-  // Same reasoning as installerUpdatePoint above, for physical_equipment's
-  // 3 checklist fields (see installer_set_physical_equipment_check in
-  // supabase/schema.sql) -- an installer can set these but not rename or
-  // delete the row, and RLS can't express "these 3 columns only."
-  installerSetPhysicalEquipmentCheck: async (
-    id: string,
-    field: PhysicalEquipmentField,
-    value: CheckState
-  ): Promise<void> => {
-    const { error } = await supabase.rpc("installer_set_physical_equipment_check", {
-      p_id: id,
-      p_field: field,
-      p_value: value,
     });
     if (error) throw new Error(error.message);
   },

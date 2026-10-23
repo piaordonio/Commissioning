@@ -784,62 +784,46 @@ reason: GoTrue creates users as the `supabase_auth_admin` role, which has
 no grants on the `public` schema, so without `security definer` every
 sign-up — not just invited ones — would fail outright.
 
-### Physical equipment: a prerequisite gate on the Install checklist
+### Space Ready / Equipment Installed / Ducted-Piped: prerequisite Install fields
 
-The 7-field Install checklist (Pipe/Flex, Pulled, Mounted, …) is tracked
-per *point*, and the existing "equipment" grouping in the points list is
-really a controller/panel, not a physical unit — one controller commonly
-serves 2-3 separate pieces of equipment (a supply fan, a heating coil),
-each needing its own readiness sign-off before a tech starts piping or
-pulling wire to any of that controller's points. `physical_equipment`
-(`supabase/schema.sql`) is a second, coarser level nested under each
-equipment/controller row, with its own fixed 3-field checklist — **Space
-Ready**, **Equipment Installed**, **Ducted/Piped** — shown in its own
-small section right under the equipment group header in both
-`PointsCardList.tsx` (phone) and `PointsView.tsx` (desktop), via the
-shared `PhysicalEquipmentChecklist.tsx` component. Unlike every other
-table in this schema, there's nothing to import these from — a tech adds
-them by hand per controller (`+ Add equipment`), and re-import never
-touches this table (equipment is never hard-deleted on re-import, so these
-rows just ride along).
+A tech shouldn't be piping or pulling wire to a point before its space is
+ready and its equipment is actually there, so these 3 checks come first in
+`INSTALL_FIELDS` (`web/src/types.ts`), ahead of Pipe/Flex/Pulled/Mounted/…
+— plain columns on `install_checks`, the same per-point grain as the other
+7 Install fields, not a separate table. An earlier version tracked these
+once per physical piece of equipment nested under each controller (one
+controller commonly serves 2-3 separate units), which needed its own table,
+RPC, and a name typed in by hand per unit before any checking could even
+start. Dropped in favor of this: per-point means the exact same grid
+behavior (click-to-cycle, shift-select, Ctrl+C/V, type `c`/`x`/`n`/`0` to
+bulk-fill a selected range) the other 7 Install fields already have
+applies here for free, and in practice these 3 values are near-identical
+across most of a controller's points anyway — copy-paste across the
+existing grid covers that redundancy far more easily than naming and
+maintaining a separate equipment entity per controller ever did.
+`INSTALL_FIELD_WEIGHTS` is rebalanced (still summing to 100) to give them
+real but secondary weight relative to Pipe/Flex/Pulled, which stay the
+dominant line items.
 
-**"Suggest from names"** speeds that hand-entry up without trusting it
-blindly: `physicalEquipmentSuggest.ts` derives a candidate name from each
-point's descriptor by stripping the leading building code and the
-trailing signal/IO code (`RCGG_BLR_P2_FB` → `BLR_P2`) and grouping points
-under a controller by what's left. Validated against 21 real descriptors
-from a live project — it correctly told `BLR`/`BLR_P2`/`BLR_P3`/`BLR_P4`
-(the boiler itself vs. three distinct pumps) and `DHWH`/`DHWH_P13` (the
-heater vs. its own pump) apart rather than lumping them into one bucket.
-It's a heuristic over free-text descriptors, not a guarantee — a
-convention it wasn't tested against can produce a nonsense grouping — so
-clicking it never creates anything directly: it opens a review list
-(checkbox + editable name + point count per guessed group) and only the
-checked ones are created, on "Add Selected".
+No RLS or RPC changes were needed for an installer to set these — they're
+plain `install_checks` columns, and that table already has a broad
+installer select/update policy covering every field on it.
 
-An installer can set all 3 checklist fields (same access as Install
-fields elsewhere) but can't create, rename, or delete a physical equipment
-row — that's owner/admin only. Enforced the same way as
-`installer_update_point()`: `physical_equipment` has no installer write
-policy on the table at all, so the only path is
-`installer_set_physical_equipment_check()`, which validates the field name
-against a 3-value allowlist (dynamic SQL column name, so this also guards
-against SQL injection) and checks `is_installer_on()` itself.
-
-**A real bug this surfaced**: verifying the new RPC's write actually
-landed uncovered that `installer_update_point()` — live since the
-original field-installer rollout — was missing `security definer`. Its
-`UPDATE points ...` ran as the calling (installer) role, which has no RLS
-write policy on `points` at all; with no policy permitting it, the update
-silently affected 0 rows under RLS (no error — RLS filtering isn't a
-rejection, the function just returns success having written nothing).
-Every Notes/Blocked By edit a field installer made through the restricted
-view was lost the moment it was typed, with the UI showing it as saved
-(optimistic local update) the whole time. Fixed alongside the new RPC,
-both now run `security definer` with a pinned `search_path`, and the fix
-was confirmed by reproducing the exact failure (an installer role calling
-the un-fixed function, writing a note, reading it back as the owner, and
-finding it blank) before and after.
+**A real bug found along the way, now fixed**: verifying an installer
+could actually write to a new Install field end-to-end uncovered that
+`installer_update_point()` — the separate RPC Notes/Blocked By edits route
+through, live since the original field-installer rollout — was missing
+`security definer`. Its `UPDATE points ...` ran as the calling (installer)
+role, which has no RLS write policy on `points` at all; with no policy
+permitting it, the update silently affected 0 rows under RLS (no error —
+RLS filtering isn't a rejection, the function just returns success having
+written nothing). Every Notes/Blocked By edit a field installer made
+through the restricted view was lost the moment it was typed, with the UI
+showing it as saved (optimistic local update) the whole time. Now runs
+`security definer` with a pinned `search_path`, confirmed by reproducing
+the exact failure (an installer role calling the un-fixed function,
+writing a note, reading it back as the owner, and finding it blank)
+before and after.
 
 ### Why five operations are Postgres functions, not plain inserts/updates
 

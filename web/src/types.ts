@@ -31,8 +31,20 @@ export const CHECK_FIELD_LABELS: Record<CheckField, string> = {
 // web/src/installProgress.ts uses INSTALL_FIELD_WEIGHTS, not a plain
 // count-of-checked like pointProgress()). "Tagged" here is the installer's
 // own self-attested tag, independent of the Commissioning "Tagged" field
-// (which is you verifying it).
+// (which is you verifying it). The first 3 fields -- Space Ready, Equipment
+// Installed, Ducted/Piped -- are prerequisite checks that gate the other 7:
+// a tech shouldn't be piping/pulling wire to a point before its space is
+// ready and its equipment is actually there. Plain fields on the same
+// per-point install_checks row, not a separate equipment-level entity
+// (tried that -- see git history -- it meant hand-typing a name per
+// physical unit before any checking could start, more overhead than it was
+// worth for values that apply near-identically across most of a
+// controller's points anyway; copy-paste across points in the grid below
+// covers that redundancy for free).
 export const INSTALL_FIELDS = [
+  "space_ready",
+  "equipment_installed",
+  "ducted_piped",
   "pipe_flex",
   "pulled",
   "mounted",
@@ -44,6 +56,9 @@ export const INSTALL_FIELDS = [
 export type InstallField = (typeof INSTALL_FIELDS)[number];
 
 export const INSTALL_FIELD_LABELS: Record<InstallField, string> = {
+  space_ready: "Space Ready",
+  equipment_installed: "Equipment Installed",
+  ducted_piped: "Ducted/Piped",
   pipe_flex: "Pipe/Flex",
   pulled: "Pulled",
   mounted: "Mounted",
@@ -53,39 +68,22 @@ export const INSTALL_FIELD_LABELS: Record<InstallField, string> = {
   end_to_end: "End-to-End",
 };
 
+// Rebalanced (still summing to 100) to make room for the 3 prerequisite
+// fields -- they're readiness gates, not big labor items on their own, so
+// they carry less weight than Pipe/Flex/Pulled but still count for
+// something real (Ducted/Piped especially, which is genuine field work).
 export const INSTALL_FIELD_WEIGHTS: Record<InstallField, number> = {
-  pipe_flex: 40,
-  pulled: 30,
-  mounted: 10,
-  panel_term: 10,
-  field_term: 5,
-  tagged: 2,
-  end_to_end: 3,
+  space_ready: 5,
+  equipment_installed: 10,
+  ducted_piped: 15,
+  pipe_flex: 30,
+  pulled: 20,
+  mounted: 8,
+  panel_term: 7,
+  field_term: 3,
+  tagged: 1,
+  end_to_end: 1,
 };
-
-// A prerequisite checklist that gates when point-level Install work (above)
-// can even start -- tracked once per physical piece of equipment (a supply
-// fan, a heating coil), not once per point or even once per equipment/
-// controller row: one controller commonly serves 2-3 separate physical
-// units, each needing its own Space Ready/Equipment Installed/Ducted-Piped
-// sign-off before a tech starts piping/pulling wire to its points. See
-// physical_equipment in supabase/schema.sql.
-export const PHYSICAL_EQUIPMENT_FIELDS = ["space_ready", "equipment_installed", "ducted_piped"] as const;
-export type PhysicalEquipmentField = (typeof PHYSICAL_EQUIPMENT_FIELDS)[number];
-
-export const PHYSICAL_EQUIPMENT_FIELD_LABELS: Record<PhysicalEquipmentField, string> = {
-  space_ready: "Space Ready",
-  equipment_installed: "Equipment Installed",
-  ducted_piped: "Ducted/Piped",
-};
-
-export type PhysicalEquipment = {
-  id: string;
-  equipment_id: string;
-  name: string;
-  created_at: string;
-  updated_at: string;
-} & Record<PhysicalEquipmentField, CheckState>;
 
 export type PointStatus = "not_started" | "in_progress" | "commissioned";
 
