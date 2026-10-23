@@ -58,7 +58,7 @@ export type InstallField = (typeof INSTALL_FIELDS)[number];
 export const INSTALL_FIELD_LABELS: Record<InstallField, string> = {
   space_ready: "Space Ready",
   equipment_installed: "Equipment Installed",
-  ducted_piped: "Ducted/Piped",
+  ducted_piped: "Ducted / Piped",
   pipe_flex: "Pipe/Flex",
   pulled: "Pulled",
   mounted: "Mounted",
