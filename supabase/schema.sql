@@ -1082,6 +1082,180 @@ begin
 end;
 $$;
 
+-- Restores a full project backup (every checklist value, Note, Blocked By,
+-- the Issue Log, and custom attribute values -- not just point/equipment
+-- structure like import_points() above) exported by the app's own "Export
+-- Backup" feature. Unlike import_points(), this always targets a project
+-- the client just created specifically for this restore (see
+-- RestoreBackupModal.tsx) -- a bare INSERT per row, not a match-existing-
+-- or-insert upsert, since the target project is guaranteed empty. Each
+-- item in p_equipment/p_points carries an "id" field that's the ORIGINAL
+-- database id from whatever project this was exported from, used purely as
+-- an opaque correlation key within this one call (equipment_id on a point,
+-- point_id on an issue/attribute value) via the two temp id-map tables
+-- below -- it is never looked up against this database, since that id is
+-- almost certainly not even the one Postgres assigns these fresh rows.
+create or replace function restore_project_backup(p_project_id uuid, p_equipment jsonb, p_points jsonb, p_issues jsonb, p_attribute_values jsonb)
+returns jsonb
+language plpgsql
+as $$
+declare
+  v_item jsonb;
+  v_new_id uuid;
+  v_equipment_id uuid;
+  v_point_id uuid;
+  v_attribute_id uuid;
+  v_equipment_count int := 0;
+  v_point_count int := 0;
+  v_issue_count int := 0;
+  v_attribute_values_restored int := 0;
+  v_skipped_attributes text[] := '{}';
+begin
+  -- Same "callable directly regardless of UI" reasoning as import_points()
+  -- above -- an installer is never offered this in the UI, but RLS alone
+  -- grants no project-level write policy an installer could lean on here
+  -- anyway, so this check is defense in depth, not the only thing stopping
+  -- them.
+  if not (is_admin(auth.uid()) or exists (select 1 from projects where id = p_project_id and owner_id = auth.uid())) then
+    raise exception 'Not authorized to restore into this project';
+  end if;
+
+  create temporary table _restore_equipment_map (orig_id uuid primary key, real_id uuid) on commit drop;
+  create temporary table _restore_point_map (orig_id uuid primary key, real_id uuid) on commit drop;
+
+  for v_item in select * from jsonb_array_elements(p_equipment) loop
+    insert into equipment (project_id, tag, equipment_type, location, notes, blocked_by)
+    values (
+      p_project_id,
+      coalesce(v_item->>'tag', ''),
+      coalesce(v_item->>'equipment_type', ''),
+      coalesce(v_item->>'location', ''),
+      coalesce(v_item->>'notes', ''),
+      coalesce(v_item->>'blocked_by', '')
+    )
+    returning id into v_new_id;
+    insert into _restore_equipment_map (orig_id, real_id) values ((v_item->>'id')::uuid, v_new_id);
+    v_equipment_count := v_equipment_count + 1;
+  end loop;
+
+  for v_item in select * from jsonb_array_elements(p_points) loop
+    select real_id into v_equipment_id from _restore_equipment_map where orig_id = (v_item->>'equipment_id')::uuid;
+    if v_equipment_id is null then
+      continue; -- defensive: a point referencing equipment that was never in p_equipment
+    end if;
+
+    insert into points (
+      equipment_id, panel, ip_op, analog_digital, point_number, descriptor, notes, blocked_by,
+      active, on_controller, added_from_controller,
+      wired, tagged, calibrate, function_test, sequence, alarm, graphics
+    )
+    values (
+      v_equipment_id,
+      coalesce(v_item->>'panel', ''),
+      coalesce(v_item->>'ip_op', ''),
+      coalesce(v_item->>'analog_digital', ''),
+      coalesce(v_item->>'point_number', ''),
+      coalesce(v_item->>'descriptor', ''),
+      coalesce(v_item->>'notes', ''),
+      coalesce(v_item->>'blocked_by', ''),
+      coalesce((v_item->>'active')::boolean, true),
+      (v_item->>'on_controller')::boolean,
+      coalesce((v_item->>'added_from_controller')::boolean, false),
+      coalesce(v_item->>'wired', ''),
+      coalesce(v_item->>'tagged', ''),
+      coalesce(v_item->>'calibrate', ''),
+      coalesce(v_item->>'function_test', ''),
+      coalesce(v_item->>'sequence', ''),
+      coalesce(v_item->>'alarm', ''),
+      coalesce(v_item->>'graphics', '')
+    )
+    returning id into v_new_id;
+
+    -- The insert above already fired trg_points_create_install_check,
+    -- giving this point a blank install_checks row -- same "update the
+    -- auto-created row, don't insert a second one" pattern
+    -- pair_reimported_point() uses above.
+    update install_checks set
+      space_ready = coalesce(v_item->>'space_ready', ''),
+      equipment_installed = coalesce(v_item->>'equipment_installed', ''),
+      ducted_piped = coalesce(v_item->>'ducted_piped', ''),
+      pipe_flex = coalesce(v_item->>'pipe_flex', ''),
+      pulled = coalesce(v_item->>'pulled', ''),
+      mounted = coalesce(v_item->>'mounted', ''),
+      panel_term = coalesce(v_item->>'panel_term', ''),
+      field_term = coalesce(v_item->>'field_term', ''),
+      tagged = coalesce(v_item->>'install_tagged', ''),
+      end_to_end = coalesce(v_item->>'end_to_end', '')
+    where point_id = v_new_id;
+
+    insert into _restore_point_map (orig_id, real_id) values ((v_item->>'id')::uuid, v_new_id);
+    v_point_count := v_point_count + 1;
+  end loop;
+
+  for v_item in select * from jsonb_array_elements(p_issues) loop
+    select real_id into v_point_id from _restore_point_map where orig_id = (v_item->>'point_id')::uuid;
+    if v_point_id is null then
+      continue; -- defensive: an issue referencing a point that was never in p_points
+    end if;
+
+    insert into issues (point_id, description, recommended_action, priority, notes, status, created_at)
+    values (
+      v_point_id,
+      coalesce(v_item->>'description', ''),
+      coalesce(v_item->>'recommended_action', ''),
+      coalesce(v_item->>'priority', 'normal'),
+      coalesce(v_item->>'notes', ''),
+      coalesce(v_item->>'status', 'open'),
+      coalesce((v_item->>'created_at')::timestamptz, now())
+    );
+    v_issue_count := v_issue_count + 1;
+  end loop;
+
+  -- Attribute *definitions* are global, not project-owned (see
+  -- point_attributes above), so unlike equipment/points there's no id-map
+  -- to build here -- restoring always runs in the same account the backup
+  -- came from, so the definition this value belongs to already exists;
+  -- matched by name (ids aren't portable the way they are for
+  -- equipment/points, which this RPC just created fresh). A name with no
+  -- matching definition is skipped and reported back, never silently
+  -- dropped or used to invent a new definition on the fly.
+  for v_item in select * from jsonb_array_elements(p_attribute_values) loop
+    select real_id into v_point_id from _restore_point_map where orig_id = (v_item->>'point_id')::uuid;
+    if v_point_id is null then
+      continue;
+    end if;
+
+    select id into v_attribute_id from point_attributes where name = v_item->>'attribute_name' limit 1;
+    if v_attribute_id is null then
+      v_skipped_attributes := array_append(v_skipped_attributes, v_item->>'attribute_name');
+      continue;
+    end if;
+
+    insert into point_attribute_projects (point_attribute_id, project_id)
+    values (v_attribute_id, p_project_id)
+    on conflict do nothing;
+
+    insert into point_attribute_values (point_id, point_attribute_id, value)
+    values (v_point_id, v_attribute_id, coalesce(v_item->>'value', ''))
+    on conflict (point_id, point_attribute_id) do update set value = excluded.value;
+    v_attribute_values_restored := v_attribute_values_restored + 1;
+  end loop;
+
+  drop table if exists _restore_equipment_map;
+  drop table if exists _restore_point_map;
+
+  return jsonb_build_object(
+    'equipment_count', v_equipment_count,
+    'point_count', v_point_count,
+    'issue_count', v_issue_count,
+    'attribute_values_restored', v_attribute_values_restored,
+    'skipped_attributes', to_jsonb(v_skipped_attributes)
+  );
+end;
+$$;
+
+grant execute on function restore_project_backup(uuid, jsonb, jsonb, jsonb, jsonb) to authenticated;
+
 -- Reconciliation: the user recognized that "point_number" going inactive
 -- and "point_number" newly added in the same re-import are actually the
 -- same physical point, renumbered — not a removal + an unrelated addition.

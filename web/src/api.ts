@@ -1,6 +1,7 @@
 import { supabase } from "./supabaseClient";
 import { ImportEquipmentDraft, ImportPointDraft } from "./mdbImport";
 import { ControllerPointRow } from "./controllerImport";
+import { ParsedBackup } from "./backup";
 import { Equipment, InviteResult, Point } from "./types";
 import { toLoginEmail } from "./username";
 
@@ -298,6 +299,24 @@ export const api = {
     return assertNoError(data as ImportDiff | null, error);
   },
 
+  // See restore_project_backup in supabase/schema.sql / RestoreBackupModal.tsx
+  // -- projectId is a project the client already created specifically for
+  // this restore (same "+ New Project" path ImportMdbModal uses), never an
+  // existing one with data of its own.
+  restoreProjectBackup: async (
+    projectId: string,
+    backup: ParsedBackup
+  ): Promise<RestoreBackupResult> => {
+    const { data, error } = await supabase.rpc("restore_project_backup", {
+      p_project_id: projectId,
+      p_equipment: backup.equipment,
+      p_points: backup.points,
+      p_issues: backup.issues,
+      p_attribute_values: backup.attributeValues,
+    });
+    return assertNoError(data as RestoreBackupResult | null, error);
+  },
+
   // Reconciliation: the user recognized that a deactivated point and a
   // newly-added point from the same import are actually the same physical
   // point, renumbered. See pair_reimported_point in supabase/schema.sql —
@@ -368,4 +387,12 @@ export interface ImportDiff {
   point_deactivated: number;
   new_points: ImportDiffPoint[];
   deactivated_points: ImportDiffPoint[];
+}
+
+export interface RestoreBackupResult {
+  equipment_count: number;
+  point_count: number;
+  issue_count: number;
+  attribute_values_restored: number;
+  skipped_attributes: string[];
 }

@@ -6,7 +6,9 @@ import { AuthScreen } from "./components/AuthScreen";
 import { Modal } from "./components/Modal";
 import { ManageTeamModal } from "./components/ManageTeamModal";
 import { ImportMdbModal } from "./components/ImportMdbModal";
+import { RestoreBackupModal } from "./components/RestoreBackupModal";
 import { VerifyControllerModal } from "./components/VerifyControllerModal";
+import { exportProjectBackup } from "./backup";
 import { PointsReport } from "./components/PointsReport";
 import { PointsView } from "./views/PointsView";
 import { PointsCardList } from "./views/PointsCardList";
@@ -144,6 +146,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
+  const [showRestoreBackup, setShowRestoreBackup] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [printing, setPrinting] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -560,6 +563,33 @@ export default function App() {
     }
   };
 
+  // Full-fidelity snapshot of the currently open project -- every checklist
+  // value, Note, Blocked By, the Issue Log, and custom attribute values, not
+  // just point/equipment structure. Pure client-side: everything it needs
+  // is already loaded in state for whichever project is open, same as
+  // Print Report's own exports. See backup.ts for why this is a separate
+  // workbook layout from those.
+  const [exportingBackup, setExportingBackup] = useState(false);
+  const exportBackup = async () => {
+    if (!currentProject) return;
+    setExportingBackup(true);
+    try {
+      await exportProjectBackup(
+        currentProject,
+        equipment,
+        points,
+        installChecks,
+        issues,
+        pointAttributes,
+        pointAttributeValues
+      );
+    } catch (err: any) {
+      setError(err.message ?? "Failed to export backup");
+    } finally {
+      setExportingBackup(false);
+    }
+  };
+
   if (authLoading) return <div className="loading-screen">Loading…</div>;
   if (!session) return <AuthScreen />;
   if (loading) return <div className="loading-screen">Loading…</div>;
@@ -645,6 +675,21 @@ export default function App() {
             </button>
             <button className="btn-primary" onClick={() => setImporting(true)}>
               Import Access Database
+            </button>
+            <button
+              className="btn-secondary"
+              disabled={!projectId || exportingBackup}
+              onClick={exportBackup}
+            >
+              {exportingBackup ? "Exporting…" : "Export Backup"}
+            </button>
+            {/* Not disabled when no project is selected, unlike every other
+                button in this group except Restore Backup below -- a
+                restore always creates its own brand-new project (see
+                RestoreBackupModal.tsx), so it was never going to touch
+                whatever project happens to be selected right now. */}
+            <button className="btn-secondary" onClick={() => setShowRestoreBackup(true)}>
+              Restore Backup
             </button>
             {/* Not disabled when no project is selected, unlike every other
                 button in this group -- attribute definitions are global, not
@@ -845,6 +890,20 @@ export default function App() {
               const target = projectId && list.some((p) => p.id === projectId) ? projectId : list[0]?.id ?? "";
               setProjectId(target);
               await refreshProjectData(target);
+            }}
+          />
+        </Modal>
+      )}
+
+      {showRestoreBackup && (
+        <Modal title="Restore Backup" onClose={() => setShowRestoreBackup(false)}>
+          <RestoreBackupModal
+            onCancel={() => setShowRestoreBackup(false)}
+            onRestored={async (newProjectId) => {
+              setShowRestoreBackup(false);
+              await refreshProjects();
+              setProjectId(newProjectId);
+              await refreshProjectData(newProjectId);
             }}
           />
         </Modal>

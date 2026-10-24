@@ -863,6 +863,57 @@ testing) and the Supabase-generated REST API surface `supabase-js` talks
 to. Try a real import against your own Supabase project before relying on
 this for a live job.)*
 
+### Export Backup / Restore Backup
+
+A full-fidelity snapshot of a project — every Install and Commissioning
+checklist value, Notes, Blocked By, the Issue Log (including Priority), and
+custom attribute values — not just the point/equipment structure the
+`.mdb` import round-trips. Built specifically to answer "what if something
+goes wrong and I need my progress back," which the existing Excel reports
+(`web/src/exportXlsx.ts`) can't do: those are tuned for human reading and
+sign-off (status pills, symbols, narrow columns), not for being read back
+in reliably. `web/src/backup.ts` is a deliberately separate, plain
+column-per-field workbook layout instead, one sheet per table (Equipment,
+Points, Issues, Attribute Values), designed for exactly one job: round-trip
+losslessly.
+
+**Export Backup** (Actions ▾ → Export Backup) is pure client-side — every
+field it needs is already loaded in state for whichever project is open,
+the same data the rest of the app already has. **Restore Backup** always
+creates a brand-new project (never overwrites an existing one — the one
+design decision settled before building this, specifically so a mistaken
+restore costs you an extra project to delete, never lost data), via a new
+`restore_project_backup()` RPC in `supabase/schema.sql` modeled on
+`import_points()`'s own bulk-insert/id-remapping pattern, but simpler:
+since the target project is always empty, every row is a plain insert, no
+match-existing-or-insert upsert logic needed. `install_checks` is updated
+(not inserted into a second time) on the row `create_install_check_for_point()`'s
+trigger already created for each new point, same pattern
+`pair_reimported_point()` uses. Custom attribute values are matched to
+their definition by name (attribute *definitions* are global, not
+project-owned, so there's no id to carry over the way there is for
+equipment/points) — a name with no match is skipped and reported back in
+the result, never silently dropped or used to invent a new definition.
+
+One naming collision to know about if you ever open a backup file
+directly: Commissioning's own "Tagged" field and the Install checklist's
+separate "Tagged" field (the installer's own self-attested tag) are two
+different columns that happen to share a label in the app — the Points
+sheet names the Install one `install_tagged` to keep them distinct.
+
+*(Verified against a real local PostgreSQL 16 instance: the RPC correctly
+rejects a non-owner/non-admin caller; a hand-built restore payload matching
+a real row's data (every Commissioning and Install field, an Issue with
+its original `created_at` preserved, and an attribute value) restores with
+every field matching the original exactly, including the `install_tagged`
+vs. Commissioning `tagged` distinction; an attribute value naming a
+definition that doesn't exist is skipped and reported, not silently
+dropped; and `install_checks` ends up as exactly one row per point, not
+duplicated. Separately verified the actual Excel write → read round-trip
+in a browser harness — export, then immediately re-parse the produced
+file — confirming booleans, blank cells, timestamps, and the
+`install_tagged`/`tagged` split all survive intact.)*
+
 ## Known gaps
 
 - **Import path is logic-tested, not tested against a real `.mdb`.** The
