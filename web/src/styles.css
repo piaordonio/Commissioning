@@ -527,11 +527,23 @@ textarea {
   user-select: none;
 }
 
+/* Panel/Point #/Descriptor together, not just Panel -- freezing Panel
+   alone left Point #/Descriptor scrolling away with the checklist columns,
+   so a tablet user had no way to tell which row they were looking at once
+   scrolled right. left is set inline per column (panelColWidth,
+   panelColWidth + pointColWidth, ...) since these are auto-fit widths
+   computed in PointsView.tsx, not fixed values a CSS class could hardcode. */
 .checklist-sticky-col {
   position: sticky;
   left: 0;
   background: var(--panel);
   z-index: 1;
+}
+
+/* Marks the right edge of the frozen region -- same weight as
+   .divider-left's column-group boundary elsewhere in this grid. */
+.checklist-sticky-col-last {
+  border-right: 2px solid var(--text-muted);
 }
 
 .data-table th.checklist-item-header {

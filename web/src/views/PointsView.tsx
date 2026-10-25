@@ -559,9 +559,12 @@ export function PointsView({
           <table className="data-table checklist-table">
             <thead>
               <tr>
-                <th className="checklist-sticky-col" style={{ width: panelColWidth }}></th>
-                <th style={{ width: pointColWidth }}></th>
-                <th style={{ width: descColWidth }}></th>
+                <th className="checklist-sticky-col" style={{ width: panelColWidth, left: 0 }}></th>
+                <th className="checklist-sticky-col" style={{ width: pointColWidth, left: panelColWidth }}></th>
+                <th
+                  className="checklist-sticky-col checklist-sticky-col-last"
+                  style={{ width: descColWidth, left: panelColWidth + pointColWidth }}
+                ></th>
                 {showInstall && (
                   <th colSpan={INSTALL_FIELDS.length + 1} className="column-group-header column-group-install">
                     Install
@@ -589,11 +592,18 @@ export function PointsView({
                 <th colSpan={4}></th>
               </tr>
               <tr>
-                <th className="checklist-sticky-col" style={{ width: panelColWidth }}>
+                <th className="checklist-sticky-col" style={{ width: panelColWidth, left: 0 }}>
                   Panel
                 </th>
-                <th style={{ width: pointColWidth }}>Point #</th>
-                <th style={{ width: descColWidth }}>Descriptor</th>
+                <th className="checklist-sticky-col" style={{ width: pointColWidth, left: panelColWidth }}>
+                  Point #
+                </th>
+                <th
+                  className="checklist-sticky-col checklist-sticky-col-last"
+                  style={{ width: descColWidth, left: panelColWidth + pointColWidth }}
+                >
+                  Descriptor
+                </th>
                 {showInstall && (
                   <>
                     {INSTALL_FIELDS.map((f) => (
@@ -702,12 +712,19 @@ export function PointsView({
                       const r = rowIndexById.get(point.id)!;
                       return (
                         <tr key={point.id} style={point.active ? undefined : { opacity: 0.55 }}>
-                          <td className="checklist-sticky-col">{displayPanel(point.panel)}</td>
-                          <td>
+                          <td className="checklist-sticky-col" style={{ left: 0 }}>
+                            {displayPanel(point.panel)}
+                          </td>
+                          <td className="checklist-sticky-col" style={{ left: panelColWidth }}>
                             {resolvedPointNumber(point)}
                             {!point.active && <span className="muted-text"> (removed)</span>}
                           </td>
-                          <td>{point.descriptor}</td>
+                          <td
+                            className="checklist-sticky-col checklist-sticky-col-last"
+                            style={{ left: panelColWidth + pointColWidth }}
+                          >
+                            {point.descriptor}
+                          </td>
                           {showInstall && (
                             <>
                               {INSTALL_FIELDS.map((field, c) => {
