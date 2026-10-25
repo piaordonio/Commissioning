@@ -4,6 +4,23 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Commissioning Points</title>
+    <script>
+      // Applied synchronously, before styles.css is parsed or React mounts
+      // anything -- the same choice useTheme.ts reads/writes, duplicated
+      // here (not imported, since this has to run before any module script)
+      // purely to avoid a flash of the wrong theme on load. "system" (the
+      // default, nothing stored yet) sets no attribute at all, same as
+      // useTheme.ts, letting styles.css's own prefers-color-scheme media
+      // query decide instead.
+      (function () {
+        try {
+          var stored = localStorage.getItem("theme");
+          if (stored === "light" || stored === "dark") {
+            document.documentElement.setAttribute("data-theme", stored);
+          }
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

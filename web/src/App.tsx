@@ -20,6 +20,7 @@ import { attributesForProject, buildAttributeValueMap } from "./pointAttributes"
 import { averageInstallProgress } from "./installProgress";
 import { resolvedPointNumber } from "./pointNumber";
 import { useIsNarrowViewport } from "./useIsNarrowViewport";
+import { useTheme } from "./useTheme";
 import {
   CheckField,
   CheckState,
@@ -42,6 +43,8 @@ import {
 } from "./types";
 
 export default function App() {
+  const [theme, setTheme] = useTheme();
+
   // Resolved once on mount (getSession()) and kept current afterward
   // (onAuthStateChange -- sign-in/out, a token refresh, or finishing an
   // email confirmation in another tab all land here). authLoading covers
@@ -653,6 +656,14 @@ export default function App() {
             Manage Team
           </button>
         )}
+        <button
+          type="button"
+          className="btn-secondary"
+          title="Cycles Light → Dark → Auto (follows your device)"
+          onClick={() => setTheme(theme === "light" ? "dark" : theme === "dark" ? "system" : "light")}
+        >
+          {theme === "light" ? "☀ Light" : theme === "dark" ? "☾ Dark" : "◐ Auto"}
+        </button>
         <button type="button" className="btn-secondary" onClick={() => supabase.auth.signOut()}>
           Sign Out
         </button>

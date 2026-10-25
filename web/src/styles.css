@@ -5,13 +5,129 @@
 :root {
   --bg: #f4f6f9;
   --panel: #ffffff;
+  --panel-alt: #f8fafc;
+  --hover-bg: #f1f5f9;
   --border: #e2e8f0;
   --text: #1e293b;
   --text-muted: #64748b;
+  --text-faint: #94a3b8;
   --accent: #2563eb;
   --accent-dark: #1d4ed8;
+  --accent-soft-bg: #eef2ff;
+  --accent-soft-text: #4338ca;
+  --accent-blue-bg: #eff6ff;
+  --accent-blue-text: #1d4ed8;
   --danger: #dc2626;
+  --danger-bg: #fee2e2;
+  --danger-text: #991b1b;
+  --danger-border: #fecaca;
+  --danger-hover-bg: #fef2f2;
+  --success: #16a34a;
+  --success-bg: #dcfce7;
+  --success-text: #166534;
+  --success-soft-bg: #f0fdf4;
+  --warning-bg: #fef3c7;
+  --warning-text: #92400e;
+  --orange-bg: #fff7ed;
+  --orange-text: #9a3412;
+  --orange-soft-bg: #ffedd5;
+  --blocked-bg: #fff7e0;
+  --blocked-text: #7f5200;
+  --purple-bg: #f5f3ff;
+  --purple-text: #6d28d9;
+  --selection-bg: #dbeafe;
+  --selection-outline: #60a5fa;
+  --overlay: rgba(15, 23, 42, 0.45);
+  --shadow: rgba(0, 0, 0, 0.2);
   --radius: 8px;
+}
+
+/* Dark mode: a manual toggle (useTheme.ts, the sun/moon button in
+   App.tsx's header) sets data-theme on <html> and persists the choice in
+   localStorage; absent that choice, this follows the OS/browser's own
+   prefers-color-scheme. Every token above gets a dark-mode value here --
+   components never branch on theme themselves, they just reference the
+   same var(--whatever) in both modes. Print is forced back to the light
+   values regardless of theme (see the @media print block below) -- paper
+   doesn't have a dark mode. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f172a;
+    --panel: #1e293b;
+    --panel-alt: #273548;
+    --hover-bg: #334155;
+    --border: #334155;
+    --text: #f1f5f9;
+    --text-muted: #94a3b8;
+    --text-faint: #64748b;
+    --accent: #3b82f6;
+    --accent-dark: #60a5fa;
+    --accent-soft-bg: #312e81;
+    --accent-soft-text: #a5b4fc;
+    --accent-blue-bg: #1e3a5f;
+    --accent-blue-text: #93c5fd;
+    --danger: #f87171;
+    --danger-bg: #450a0a;
+    --danger-text: #fca5a5;
+    --danger-border: #7f1d1d;
+    --danger-hover-bg: #5c1a1a;
+    --success: #4ade80;
+    --success-bg: #14532d;
+    --success-text: #86efac;
+    --success-soft-bg: #052e16;
+    --warning-bg: #451a03;
+    --warning-text: #fbbf24;
+    --orange-bg: #431407;
+    --orange-text: #fb923c;
+    --orange-soft-bg: #4a1d0a;
+    --blocked-bg: #422006;
+    --blocked-text: #fcd34d;
+    --purple-bg: #2e1065;
+    --purple-text: #c4b5fd;
+    --selection-bg: #1e3a5f;
+    --selection-outline: #60a5fa;
+    --overlay: rgba(0, 0, 0, 0.6);
+    --shadow: rgba(0, 0, 0, 0.5);
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #0f172a;
+  --panel: #1e293b;
+  --panel-alt: #273548;
+  --hover-bg: #334155;
+  --border: #334155;
+  --text: #f1f5f9;
+  --text-muted: #94a3b8;
+  --text-faint: #64748b;
+  --accent: #3b82f6;
+  --accent-dark: #60a5fa;
+  --accent-soft-bg: #312e81;
+  --accent-soft-text: #a5b4fc;
+  --accent-blue-bg: #1e3a5f;
+  --accent-blue-text: #93c5fd;
+  --danger: #f87171;
+  --danger-bg: #450a0a;
+  --danger-text: #fca5a5;
+  --danger-border: #7f1d1d;
+  --danger-hover-bg: #5c1a1a;
+  --success: #4ade80;
+  --success-bg: #14532d;
+  --success-text: #86efac;
+  --success-soft-bg: #052e16;
+  --warning-bg: #451a03;
+  --warning-text: #fbbf24;
+  --orange-bg: #431407;
+  --orange-text: #fb923c;
+  --orange-soft-bg: #4a1d0a;
+  --blocked-bg: #422006;
+  --blocked-text: #fcd34d;
+  --purple-bg: #2e1065;
+  --purple-text: #c4b5fd;
+  --selection-bg: #1e3a5f;
+  --selection-outline: #60a5fa;
+  --overlay: rgba(0, 0, 0, 0.6);
+  --shadow: rgba(0, 0, 0, 0.5);
 }
 
 html,
@@ -66,8 +182,8 @@ body {
 }
 
 .error-banner {
-  background: #fee2e2;
-  color: #991b1b;
+  background: var(--danger-bg);
+  color: var(--danger-text);
   padding: 8px 20px;
   font-size: 13px;
 }
@@ -142,21 +258,21 @@ button {
 }
 
 .btn-secondary {
-  background: white;
+  background: var(--panel);
   border: 1px solid var(--border);
   color: var(--text);
 }
 .btn-secondary:hover {
-  background: #f1f5f9;
+  background: var(--hover-bg);
 }
 
 .btn-danger {
-  background: white;
-  border: 1px solid #fecaca;
+  background: var(--panel);
+  border: 1px solid var(--danger-border);
   color: var(--danger);
 }
 .btn-danger:hover {
-  background: #fef2f2;
+  background: var(--danger-hover-bg);
 }
 
 .icon-btn {
@@ -195,7 +311,7 @@ textarea {
   font-size: 13px;
   font-family: inherit;
   color: var(--text);
-  background: white;
+  background: var(--panel);
 }
 
 .spacer {
@@ -203,8 +319,8 @@ textarea {
 }
 
 .count-pill {
-  background: #eef2ff;
-  color: #4338ca;
+  background: var(--accent-soft-bg);
+  color: var(--accent-soft-text);
   padding: 3px 10px;
   border-radius: 999px;
   font-size: 12px;
@@ -226,7 +342,7 @@ textarea {
 .data-table th {
   text-align: center;
   padding: 10px 12px;
-  background: #f8fafc;
+  background: var(--panel-alt);
   border-bottom: 1px solid var(--border);
   white-space: nowrap;
   color: var(--text-muted);
@@ -262,7 +378,7 @@ textarea {
   cursor: pointer;
 }
 .clickable-row:hover {
-  background: #f8fafc;
+  background: var(--panel-alt);
 }
 
 .truncate {
@@ -287,7 +403,7 @@ textarea {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.45);
+  background: var(--overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -296,13 +412,13 @@ textarea {
 }
 
 .modal {
-  background: white;
+  background: var(--panel);
   border-radius: 10px;
   width: 460px;
   max-width: 100%;
   max-height: 90vh;
   overflow-y: auto;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 10px 40px var(--shadow);
 }
 
 .modal-header {
@@ -414,7 +530,7 @@ textarea {
 .checklist-sticky-col {
   position: sticky;
   left: 0;
-  background: white;
+  background: var(--panel);
   z-index: 1;
 }
 
@@ -464,7 +580,7 @@ textarea {
 }
 
 .checklist-cell:hover {
-  background: #f8fafc;
+  background: var(--panel-alt);
 }
 
 /* .checklist-cell/.checklist-item-header already carry their own 1px
@@ -491,37 +607,37 @@ textarea {
 }
 
 .column-group-install {
-  background: #fff7ed;
-  color: #9a3412;
+  background: var(--orange-bg);
+  color: var(--orange-text);
 }
 
 .column-group-commissioning {
-  background: #eff6ff;
-  color: #1d4ed8;
+  background: var(--accent-blue-bg);
+  color: var(--accent-blue-text);
 }
 
 .column-group-attributes {
-  background: #f5f3ff;
-  color: #6d28d9;
+  background: var(--purple-bg);
+  color: var(--purple-text);
 }
 
 .checklist-check {
-  color: #16a34a;
+  color: var(--success);
 }
 
 .checklist-x {
-  color: #dc2626;
+  color: var(--danger);
 }
 
 .checklist-na {
-  color: #94a3b8;
+  color: var(--text-faint);
   font-weight: 600;
   font-size: 11px;
 }
 
 .checklist-selected {
-  background: #dbeafe !important;
-  outline: 2px solid #60a5fa;
+  background: var(--selection-bg) !important;
+  outline: 2px solid var(--selection-outline);
   outline-offset: -2px;
 }
 
@@ -563,7 +679,7 @@ textarea {
 .checklist-inline-input.attr-value-na,
 .mobile-input.attr-value-na,
 .report-col-attr-text.attr-value-na {
-  color: #94a3b8;
+  color: var(--text-faint);
 }
 
 .checklist-inline-input {
@@ -578,9 +694,9 @@ textarea {
   color: var(--text);
 }
 .checklist-inline-input:focus {
-  outline: 2px solid #60a5fa;
+  outline: 2px solid var(--selection-outline);
   outline-offset: -2px;
-  background: white;
+  background: var(--panel);
 }
 
 /* Notes is the one checklist-inline-input that's a <textarea>, not an
@@ -599,10 +715,10 @@ textarea {
 }
 
 .checklist-blocked {
-  background: #fff7e0;
+  background: var(--blocked-bg);
 }
 .checklist-blocked .checklist-inline-input {
-  color: #7f5200;
+  color: var(--blocked-text);
   font-weight: 600;
 }
 
@@ -612,8 +728,8 @@ textarea {
   border-radius: 999px;
   font-size: 11px;
   font-weight: 600;
-  background: #fee2e2;
-  color: #991b1b;
+  background: var(--danger-bg);
+  color: var(--danger-text);
 }
 
 .controller-added-pill {
@@ -623,8 +739,8 @@ textarea {
   border-radius: 999px;
   font-size: 11px;
   font-weight: 600;
-  background: #dcfce7;
-  color: #166534;
+  background: var(--success-bg);
+  color: var(--success-text);
 }
 
 /* Always-visible flag/entry-point next to Blocked By -- neutral outline by
@@ -639,11 +755,11 @@ textarea {
   font-weight: 600;
   white-space: nowrap;
   color: var(--text-muted);
-  background: white;
+  background: var(--panel);
 }
 .issue-flag-active {
   border-color: var(--danger);
-  background: #fee2e2;
+  background: var(--danger-bg);
   color: var(--danger);
 }
 
@@ -653,8 +769,8 @@ textarea {
   border-radius: 999px;
   font-size: 12px;
   font-weight: 600;
-  background: #ffedd5;
-  color: #9a3412;
+  background: var(--orange-soft-bg);
+  color: var(--orange-text);
 }
 
 /* Same icon/count/"open issue(s)" layout as .issue-count-pill above, but a
@@ -669,7 +785,7 @@ textarea {
   border-radius: 999px;
   font-size: 12px;
   font-weight: 600;
-  background: #fee2e2;
+  background: var(--danger-bg);
   color: var(--danger);
 }
 
@@ -716,36 +832,36 @@ textarea {
    Completed -- see pointProgress() in web/src/progress.ts). Reuses the same
    light grey .status-not_started already uses elsewhere in this palette. */
 .attr-stray-whitespace {
-  background: #f1f5f9;
+  background: var(--hover-bg);
 }
 .status-not_started {
-  background: #f1f5f9;
-  color: #64748b;
+  background: var(--hover-bg);
+  color: var(--text-muted);
 }
 .status-in_progress {
-  background: #fef3c7;
-  color: #92400e;
+  background: var(--warning-bg);
+  color: var(--warning-text);
 }
 .status-commissioned,
 .status-complete {
-  background: #dcfce7;
-  color: #166534;
+  background: var(--success-bg);
+  color: var(--success-text);
 }
 .status-open {
-  background: #fef3c7;
-  color: #92400e;
+  background: var(--warning-bg);
+  color: var(--warning-text);
 }
 .status-closed {
-  background: #dcfce7;
-  color: #166534;
+  background: var(--success-bg);
+  color: var(--success-text);
 }
 .priority-urgent {
-  background: #fee2e2;
+  background: var(--danger-bg);
   color: var(--danger);
 }
 .priority-normal {
-  background: #f1f5f9;
-  color: #64748b;
+  background: var(--hover-bg);
+  color: var(--text-muted);
 }
 
 /* Smaller font + tighter padding than the interactive grid: the report
@@ -876,7 +992,7 @@ textarea {
   gap: 16px;
   font-size: 12px;
   color: var(--text-muted);
-  background: #f8fafc;
+  background: var(--panel-alt);
   border: 1px solid var(--border);
   border-radius: 4px;
   padding: 6px 12px;
@@ -893,6 +1009,53 @@ textarea {
 }
 
 @media print {
+  /* Paper doesn't have a dark mode -- force every token back to its light
+     value regardless of the active theme. !important, not just a plain
+     :root rule, is load-bearing here: :root[data-theme="dark"] (an
+     attribute selector) outranks a bare :root on specificity no matter
+     which one is nested in @media print, so without !important this block
+     loses to the dark-mode override and a printed report would come out
+     dark-on-dark. Verified directly (Playwright's print media emulation
+     with data-theme="dark" set, checking the computed --panel value) --
+     the plain version silently didn't win before this was added. */
+  :root {
+    --bg: #f4f6f9 !important;
+    --panel: #ffffff !important;
+    --panel-alt: #f8fafc !important;
+    --hover-bg: #f1f5f9 !important;
+    --border: #e2e8f0 !important;
+    --text: #1e293b !important;
+    --text-muted: #64748b !important;
+    --text-faint: #94a3b8 !important;
+    --accent: #2563eb !important;
+    --accent-dark: #1d4ed8 !important;
+    --accent-soft-bg: #eef2ff !important;
+    --accent-soft-text: #4338ca !important;
+    --accent-blue-bg: #eff6ff !important;
+    --accent-blue-text: #1d4ed8 !important;
+    --danger: #dc2626 !important;
+    --danger-bg: #fee2e2 !important;
+    --danger-text: #991b1b !important;
+    --danger-border: #fecaca !important;
+    --danger-hover-bg: #fef2f2 !important;
+    --success: #16a34a !important;
+    --success-bg: #dcfce7 !important;
+    --success-text: #166534 !important;
+    --success-soft-bg: #f0fdf4 !important;
+    --warning-bg: #fef3c7 !important;
+    --warning-text: #92400e !important;
+    --orange-bg: #fff7ed !important;
+    --orange-text: #9a3412 !important;
+    --orange-soft-bg: #ffedd5 !important;
+    --blocked-bg: #fff7e0 !important;
+    --blocked-text: #7f5200 !important;
+    --purple-bg: #f5f3ff !important;
+    --purple-text: #6d28d9 !important;
+    --selection-bg: #dbeafe !important;
+    --selection-outline: #60a5fa !important;
+    --overlay: rgba(15, 23, 42, 0.45) !important;
+    --shadow: rgba(0, 0, 0, 0.2) !important;
+  }
   .no-print {
     display: none !important;
   }
@@ -927,16 +1090,16 @@ textarea {
   border-radius: 999px;
   font-size: 12px;
   font-weight: 600;
-  background: #eef2ff;
-  color: #4338ca;
+  background: var(--accent-soft-bg);
+  color: var(--accent-soft-text);
 }
 
 .progress-pill-high {
-  color: #16a34a;
+  color: var(--success);
 }
 
 .progress-pill-low {
-  color: #dc2626;
+  color: var(--danger);
 }
 
 /* Marks the start of a logical column group (Status / Date Commissioned /
@@ -1129,7 +1292,7 @@ textarea {
   padding: 8px 12px;
   border: none;
   border-top: 1px solid var(--border);
-  background: white;
+  background: var(--panel);
   font-size: 15px;
   font-family: inherit;
   color: var(--text);
@@ -1140,16 +1303,16 @@ textarea {
   border-top: none;
 }
 .mobile-field-row:active {
-  background: #f1f5f9;
+  background: var(--hover-bg);
 }
 .mobile-field-row-check {
-  background: #f0fdf4;
+  background: var(--success-soft-bg);
 }
 .mobile-field-row-x {
-  background: #fef2f2;
+  background: var(--danger-hover-bg);
 }
 .mobile-field-row-na {
-  background: #f8fafc;
+  background: var(--panel-alt);
 }
 
 .mobile-field-value {
@@ -1175,8 +1338,8 @@ textarea {
   color: var(--text);
 }
 .mobile-input.checklist-blocked {
-  background: #fff7e0;
-  color: #7f5200;
+  background: var(--blocked-bg);
+  color: var(--blocked-text);
   font-weight: 600;
 }
 
@@ -1376,7 +1539,7 @@ textarea {
 .install-field-tile-pct {
   font-size: 20px;
   font-weight: 700;
-  color: #4338ca;
+  color: var(--accent-soft-text);
   margin-bottom: 6px;
 }
 
@@ -1389,15 +1552,15 @@ textarea {
 
 .install-field-tile-fill {
   height: 100%;
-  background: #4338ca;
+  background: var(--accent-soft-text);
 }
 
 .install-field-tile-fill-high {
-  background: #16a34a;
+  background: var(--success);
 }
 
 .install-field-tile-fill-low {
-  background: #dc2626;
+  background: var(--danger);
 }
 
 .dashboard-installers {
@@ -1483,7 +1646,7 @@ textarea {
   color: var(--text);
 }
 .dashboard-equipment-row:hover {
-  background: #f8fafc;
+  background: var(--panel-alt);
 }
 
 .dashboard-equipment-tag {

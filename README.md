@@ -914,6 +914,28 @@ in a browser harness — export, then immediately re-parse the produced
 file — confirming booleans, blank cells, timestamps, and the
 `install_tagged`/`tagged` split all survive intact.)*
 
+### Dark mode
+
+A ☀ Light / ☾ Dark / ◐ Auto toggle in the header, cycling in that order,
+persisted in `localStorage` (`useTheme.ts`). "Auto" removes the stored
+choice entirely and follows the OS/browser's own `prefers-color-scheme`
+instead of pinning either value. Every color in `styles.css` is a CSS
+custom property on `:root` (not hardcoded hex) specifically so this works
+without touching components — they all already reference `var(--whatever)`,
+so a theme change is purely a `:root`/`:root[data-theme]` swap. A tiny
+inline script in `index.html`'s `<head>` applies the stored choice
+synchronously before `styles.css` is even parsed, to avoid a flash of the
+wrong theme on load.
+
+Printing stays light regardless of the active theme — paper doesn't have a
+dark mode. That needed `!important` on the `@media print` token overrides,
+not just a plain `:root` rule: `:root[data-theme="dark"]`'s attribute
+selector outranks a bare `:root` on CSS specificity no matter which one is
+nested in `@media print`, so the first version of this silently lost and
+would have printed a dark report. Caught by checking the actual computed
+`--panel` value under Playwright's print-media emulation with dark mode
+active, not just eyeballing it.
+
 ## Known gaps
 
 - **Import path is logic-tested, not tested against a real `.mdb`.** The
