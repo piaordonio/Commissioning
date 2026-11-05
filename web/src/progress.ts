@@ -1,4 +1,4 @@
-import { CHECK_FIELDS, CheckState, Point, PointAttribute } from "./types";
+import { CHECK_FIELDS, CheckField, CheckState, Point, PointAttribute } from "./types";
 import { isAttrValueNA } from "./pointAttributes";
 
 /** Credit each state earns toward "done"; null excludes the field from the average (N/A). */
@@ -76,4 +76,27 @@ export function buildProgressByEquipment(
     result.set(equipmentId, Math.round(averageProgress(pts, attrs, attrValueMap) * 100));
   }
   return result;
+}
+
+// Percentage (0-100) of active points where this ONE Commissioning field is
+// checked, among points where it isn't marked N/A -- same per-field
+// exclude-N/A-from-the-denominator convention pointProgress() already uses
+// across all 7 fields at once, just restricted to a single field for the
+// Dashboard's "Commissioning Progress by Activity" breakdown, the
+// Commissioning counterpart to installFieldPercent() in installProgress.ts.
+// Unlike that one, no checksByPointId map is needed -- CHECK_FIELDS live
+// directly on Point, not a separate per-point table the way Install's do.
+export function checkFieldPercent(points: Point[], field: CheckField): number {
+  let checked = 0;
+  let counted = 0;
+  for (const p of points) {
+    const value = p[field];
+    if (value === "na") continue;
+    counted++;
+    if (value === "check") checked++;
+  }
+  // Vacuously complete when every point is N/A for this field (or there are
+  // no points at all) -- same convention pointProgress()'s applicable===0
+  // case uses.
+  return counted === 0 ? 100 : Math.round((checked / counted) * 100);
 }

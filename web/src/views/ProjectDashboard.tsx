@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
 import {
+  CHECK_FIELDS,
+  CHECK_FIELD_LABELS,
   Equipment,
   INSTALL_FIELDS,
   INSTALL_FIELD_LABELS,
@@ -14,7 +16,7 @@ import {
   POINT_STATUS_LABELS,
   ProjectInstaller,
 } from "../types";
-import { averageProgress, buildProgressByEquipment } from "../progress";
+import { averageProgress, buildProgressByEquipment, checkFieldPercent } from "../progress";
 import {
   averageInstallProgress,
   buildInstallProgressByEquipment,
@@ -138,6 +140,16 @@ export function ProjectDashboard({
   const installFieldPercents = useMemo(
     () => INSTALL_FIELDS.map((field) => ({ field, pct: installFieldPercent(activePoints, installChecksByPointId, field) })),
     [activePoints, installChecksByPointId]
+  );
+  // Commissioning counterpart -- one tile per CHECK_FIELDS field, same
+  // "which specific activity is lagging" reasoning as installFieldPercents
+  // above. Owner/admin only, same as every other Commissioning-specific
+  // number on this screen (see installerView below) -- an installer has no
+  // Commissioning access at all, and showing even this breakdown would leak
+  // that there's Commissioning data to leak.
+  const checkFieldPercents = useMemo(
+    () => CHECK_FIELDS.map((field) => ({ field, pct: checkFieldPercent(activePoints, field) })),
+    [activePoints]
   );
   const progressByEquipment = useMemo(
     () => buildProgressByEquipment(activePoints, projectAttrs, attrValueMap),
@@ -399,6 +411,28 @@ export function ProjectDashboard({
             {installFieldPercents.map(({ field, pct }) => (
               <div key={field} className="install-field-tile">
                 <div className="install-field-tile-label">{INSTALL_FIELD_LABELS[field]}</div>
+                <div className={`install-field-tile-pct ${pct > 90 ? "progress-pill-high" : pct < 10 ? "progress-pill-low" : ""}`}>
+                  {pct}%
+                </div>
+                <div className="install-field-tile-track">
+                  <div
+                    className={`install-field-tile-fill ${pct > 90 ? "install-field-tile-fill-high" : pct < 10 ? "install-field-tile-fill-low" : ""}`}
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {!installerView && groups.length > 0 && (
+        <div className="install-field-tiles-section">
+          <div className="section-label">Commissioning Progress by Activity</div>
+          <div className="install-field-tiles">
+            {checkFieldPercents.map(({ field, pct }) => (
+              <div key={field} className="install-field-tile">
+                <div className="install-field-tile-label">{CHECK_FIELD_LABELS[field]}</div>
                 <div className={`install-field-tile-pct ${pct > 90 ? "progress-pill-high" : pct < 10 ? "progress-pill-low" : ""}`}>
                   {pct}%
                 </div>
