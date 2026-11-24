@@ -826,6 +826,7 @@ declare
   v_checked int;
   v_na int;
   v_project_id uuid;
+  v_attr_touched boolean;
 begin
   v_checked := (case when p.wired = 'check' then 1 else 0 end)
              + (case when p.tagged = 'check' then 1 else 0 end)
@@ -842,11 +843,35 @@ begin
         + (case when p.alarm = 'na' then 1 else 0 end)
         + (case when p.graphics = 'na' then 1 else 0 end);
 
-  if v_checked < 7 - v_na then
-    return case when v_checked = 0 then 'not_started' else 'in_progress' end;
-  end if;
-
   select e.project_id into v_project_id from equipment e where e.id = p.equipment_id;
+
+  if v_checked < 7 - v_na then
+    -- A custom attribute (point_attributes/pointProgress() in progress.ts
+    -- already counts these toward % Completed) must be able to push a
+    -- point out of Not Started on its own, even with all 7 fixed fields
+    -- still blank -- otherwise a point can sit at a nonzero % Completed
+    -- while its status still reads "Not Started", which is exactly the
+    -- bug this was filed against. "Touched" mirrors each field's own
+    -- convention: a boolean attribute counts only when actually checked
+    -- (same as the 7 fixed fields above -- an 'x' doesn't move this
+    -- needle for them either, so it shouldn't for a boolean attribute);
+    -- a text/number attribute counts once it holds a real value (not
+    -- blank, not literally "N/A" -- same isAttrValueNA() convention
+    -- pointProgress() already uses client-side).
+    select exists (
+      select 1
+      from point_attribute_projects pap
+      join point_attributes pa on pa.id = pap.point_attribute_id
+      join point_attribute_values pav
+        on pav.point_id = p.id and pav.point_attribute_id = pap.point_attribute_id
+      where pap.project_id = v_project_id
+        and (
+          (pa.attr_type = 'boolean' and pav.value = 'check')
+          or (pa.attr_type <> 'boolean' and btrim(pav.value) <> '' and upper(btrim(pav.value)) <> 'N/A')
+        )
+    ) into v_attr_touched;
+    return case when v_checked = 0 and not v_attr_touched then 'not_started' else 'in_progress' end;
+  end if;
 
   if exists (
     select 1
