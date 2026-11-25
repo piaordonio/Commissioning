@@ -576,7 +576,9 @@ export function PointsView({
                       <th colSpan={CHECK_FIELDS.length} className="column-group-header column-group-commissioning">
                         Commissioning
                       </th>
-                      <th colSpan={projectAttrs.length} className="column-group-header column-group-attributes"></th>
+                      <th colSpan={projectAttrs.length} className="column-group-header column-group-attributes">
+                        Attributes
+                      </th>
                       <th colSpan={2} className="column-group-header column-group-commissioning">
                         Commissioning
                       </th>
@@ -587,7 +589,9 @@ export function PointsView({
                     </th>
                   ))}
                 {!showCommissioning && showAttributes && projectAttrs.length > 0 && (
-                  <th colSpan={projectAttrs.length} className="column-group-header column-group-attributes"></th>
+                  <th colSpan={projectAttrs.length} className="column-group-header column-group-attributes">
+                    Attributes
+                  </th>
                 )}
                 <th colSpan={4}></th>
               </tr>
