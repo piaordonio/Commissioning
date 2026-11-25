@@ -570,24 +570,20 @@ export function PointsView({
                     Install
                   </th>
                 )}
-                {showCommissioning &&
-                  (showAttributes && projectAttrs.length > 0 ? (
-                    <>
-                      <th colSpan={CHECK_FIELDS.length} className="column-group-header column-group-commissioning">
-                        Commissioning
-                      </th>
-                      <th colSpan={projectAttrs.length} className="column-group-header column-group-attributes">
-                        Attributes
-                      </th>
-                      <th colSpan={2} className="column-group-header column-group-commissioning">
-                        Commissioning
-                      </th>
-                    </>
-                  ) : (
-                    <th colSpan={CHECK_FIELDS.length + 2} className="column-group-header column-group-commissioning">
-                      Commissioning
-                    </th>
-                  ))}
+                {showCommissioning && (
+                  // Custom attribute columns sit between CHECK_FIELDS and
+                  // Status/Date Commissioned in the body rows below (see
+                  // booleanAttributes/textNumberAttributes further down) --
+                  // folded into this one span rather than their own
+                  // "Attributes" band, so they read as part of the
+                  // Commissioning checklist, not a separate group next to it.
+                  <th
+                    colSpan={CHECK_FIELDS.length + (showAttributes ? projectAttrs.length : 0) + 2}
+                    className="column-group-header column-group-commissioning"
+                  >
+                    Commissioning
+                  </th>
+                )}
                 {!showCommissioning && showAttributes && projectAttrs.length > 0 && (
                   <th colSpan={projectAttrs.length} className="column-group-header column-group-attributes">
                     Attributes
