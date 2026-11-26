@@ -31,6 +31,15 @@ import { PointGroup, usePointRows } from "../usePointRows";
 import { resolvedPointNumber } from "../pointNumber";
 import { fromLoginEmail } from "../username";
 
+// Mirrors the reference tracker spreadsheet's conditional-formatting bands
+// for % Install / % Commissioned (red below 60.5%, green at/above 99.5%,
+// blue in between) -- used only for this Dashboard's own progress pills.
+function pctBandClass(pct: number): string {
+  if (pct >= 99.5) return "progress-pill-high";
+  if (pct < 60.5) return "progress-pill-low";
+  return "";
+}
+
 // A project-wide rollup, not a narrowed working view like the grid/mobile
 // card list -- same architectural slot as PointsReport.tsx, a purpose-built
 // screen rather than a responsive reflow of one of the others. Reuses
@@ -259,17 +268,9 @@ export function ProjectDashboard({
             {eq?.location ? ` — ${eq.location}` : ""}
           </span>
           <span className="count-pill">{g.items.length}</span>
-          <span
-            className={`progress-pill ${
-              installPct > 90 ? "progress-pill-high" : installPct < 10 ? "progress-pill-low" : ""
-            }`}
-          >
-            Install {installPct}%
-          </span>
+          <span className={`progress-pill ${pctBandClass(installPct)}`}>Install {installPct}%</span>
           {!installerView && (
-            <span className={`progress-pill ${pct > 90 ? "progress-pill-high" : pct < 10 ? "progress-pill-low" : ""}`}>
-              Commissioning {pct}%
-            </span>
+            <span className={`progress-pill ${pctBandClass(pct)}`}>Commissioning {pct}%</span>
           )}
           {issueCount > 0 && (
             <span className="issue-count-pill">
@@ -394,8 +395,10 @@ export function ProjectDashboard({
             ? `${installCompleteGroups.length} of ${groups.length} equipment installed`
             : `${commissionedGroups.length} of ${groups.length} equipment commissioned`}
         </span>
-        <span className="progress-pill">Install {overallInstallPct}%</span>
-        {!installerView && <span className="progress-pill">Commissioning {overallPct}%</span>}
+        <span className={`progress-pill ${pctBandClass(overallInstallPct)}`}>Install {overallInstallPct}%</span>
+        {!installerView && (
+          <span className={`progress-pill ${pctBandClass(overallPct)}`}>Commissioning {overallPct}%</span>
+        )}
         {activeIssueRows.length > 0 && (
           <span className="issue-count-pill">
             <span className="issue-icon">!</span> {activeIssueRows.length} open issue

@@ -1132,6 +1132,30 @@ textarea {
   color: var(--danger);
 }
 
+/* Flat, square-cornered fills instead of rounded pills -- scoped to the
+   Dashboard summary view only, mirroring the flat conditional-formatting
+   look of the reference tracker spreadsheet (red/blue/green cell fills on
+   % Install / % Commissioned) without touching these same pill classes
+   anywhere else in the app (grid, mobile cards, printed reports). */
+.dashboard-view .progress-pill,
+.dashboard-view .status-pill,
+.dashboard-view .issue-count-pill,
+.dashboard-view .priority-urgent {
+  border-radius: 4px;
+}
+.dashboard-view .progress-pill {
+  background: var(--accent-blue-bg);
+  color: var(--accent-blue-text);
+}
+.dashboard-view .progress-pill.progress-pill-high {
+  background: var(--success-bg);
+  color: var(--success-text);
+}
+.dashboard-view .progress-pill.progress-pill-low {
+  background: var(--danger-bg);
+  color: var(--danger-text);
+}
+
 /* Marks the start of a logical column group (Status / Date Commissioned /
    Notes, each a rollup or free-text field distinct from the 8 checklist
    columns before them) -- shared between the grid and the report so both
