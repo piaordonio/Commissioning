@@ -113,7 +113,11 @@ export function PointsView({
   const [statusFilter, setStatusFilter] = useState<PointStatus | "">("");
   const [installStatusFilter, setInstallStatusFilter] = useState<InstallStatus | "">("");
   const [search, setSearch] = useState("");
-  const [showInstall, setShowInstall] = useState(true);
+  // Off by default for an owner/admin (Commissioning is the default focus);
+  // an installer has no Commissioning access at all, so Install is the only
+  // thing worth showing them and stays on, same inverse mirroring as
+  // showCommissioning just below.
+  const [showInstall, setShowInstall] = useState(installerView);
   const [showCommissioning, setShowCommissioning] = useState(!installerView);
   const [showAttributes, setShowAttributes] = useState(true);
 
