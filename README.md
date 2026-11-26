@@ -825,6 +825,37 @@ the exact failure (an installer role calling the un-fixed function,
 writing a note, reading it back as the owner, and finding it blank)
 before and after.
 
+### Program: an 8th fixed Commissioning field
+
+Added alongside Wired/Tagged/Calibrate/Function Test/Sequence/Alarm/
+Graphics in `CHECK_FIELDS` (`web/src/types.ts`) — a plain column on
+`points`, the same per-point grain as the other 7, not a project-level
+custom attribute (those are for genuinely variable, per-project fields;
+Program is a fixed part of every Commissioning checklist, same as the
+other 7). `CHECK_FIELDS`/`Point` and everything downstream that iterates
+them (the grid, the mobile card list, the printed/exported reports,
+`pointProgress()`/`checkFieldPercent()` in `progress.ts`, the Dashboard's
+Commissioning Progress by Activity tiles) is fully parametric — adding it
+to the array was the only frontend change needed; nothing else references
+these 7 (now 8) field names individually anywhere in `web/src`.
+
+The database side isn't parametric the same way: `full_bucket()` (the
+trigger that computes `points.status`) sums each fixed field's
+check/N/A state by name rather than looping a list, so adding an 8th
+field meant updating that sum and changing its hardcoded `7` to `8`,
+plus adding `program` everywhere else a fixed field is named by hand --
+`bulk_set_points()`'s field allowlist, `pair_reimported_point()`'s
+old-point-to-new-point transfer, and `restore_project_backup()`'s insert
+column list. Easy to miss one of these and have Program silently not
+carry through a re-import pairing or a backup restore -- all four were
+updated together and verified against a local Postgres instance: a point
+with the original 7 fields checked but Program still blank correctly
+reads In Progress, not Commissioned, until Program is set too (via
+`bulk_set_points()`, the real write path a grid click uses); checking it
+then correctly flips the point to Commissioned; `pair_reimported_point()`
+carries Program's value forward onto a renumbered point; and
+`restore_project_backup()` restores it correctly from a backup file.
+
 ### Why five operations are Postgres functions, not plain inserts/updates
 
 `import_points()`, `bulk_set_points()`, `bulk_set_install_checks()`,

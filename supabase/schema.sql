@@ -85,6 +85,12 @@ alter table points add column if not exists added_from_controller boolean not nu
 -- before the Function Test checklist field existed.
 alter table points add column if not exists function_test text not null default '' check (function_test in ('', 'check', 'x', 'na'));
 
+-- Idempotent for anyone who already ran an earlier version of this file
+-- before the Program checklist field existed -- the 8th fixed Commissioning
+-- field, alongside Wired/Tagged/Calibrate/Function Test/Sequence/Alarm/
+-- Graphics in CHECK_FIELDS (web/src/types.ts).
+alter table points add column if not exists program text not null default '' check (program in ('', 'check', 'x', 'na'));
+
 -- status/date_commissioned are maintained entirely by
 -- set_point_status_and_date() below, never written directly by the app.
 alter table points add column if not exists status text not null default 'not_started' check (status in ('not_started', 'in_progress', 'commissioned'));
@@ -804,7 +810,7 @@ insert into install_checks (point_id, end_to_end)
 -- (End-to-End moved to install_checks -- verified during Function Test
 -- rather than tracked as its own commissioning field, so it's excluded
 -- from this count.)
--- Reads the point's full completeness: the 7 fixed fields (each check/N/A),
+-- Reads the point's full completeness: the 8 fixed fields (each check/N/A),
 -- plus every custom attribute assigned to the point's project (see
 -- point_attribute_projects) -- Boolean the same check/N/A rule as the fixed
 -- fields, Text/Number requiring an actual non-N/A value (isAttrValueNA() in
@@ -834,18 +840,23 @@ begin
              + (case when p.function_test = 'check' then 1 else 0 end)
              + (case when p.sequence = 'check' then 1 else 0 end)
              + (case when p.alarm = 'check' then 1 else 0 end)
-             + (case when p.graphics = 'check' then 1 else 0 end);
+             + (case when p.graphics = 'check' then 1 else 0 end)
+             + (case when p.program = 'check' then 1 else 0 end);
   v_na := (case when p.wired = 'na' then 1 else 0 end)
         + (case when p.tagged = 'na' then 1 else 0 end)
         + (case when p.calibrate = 'na' then 1 else 0 end)
         + (case when p.function_test = 'na' then 1 else 0 end)
         + (case when p.sequence = 'na' then 1 else 0 end)
         + (case when p.alarm = 'na' then 1 else 0 end)
-        + (case when p.graphics = 'na' then 1 else 0 end);
+        + (case when p.graphics = 'na' then 1 else 0 end)
+        + (case when p.program = 'na' then 1 else 0 end);
 
   select e.project_id into v_project_id from equipment e where e.id = p.equipment_id;
 
-  if v_checked < 7 - v_na then
+  -- 8 fixed Commissioning fields now (Program added alongside the
+  -- original 7) -- this 8 must track CHECK_FIELDS.length in
+  -- web/src/types.ts exactly.
+  if v_checked < 8 - v_na then
     -- A custom attribute (point_attributes/pointProgress() in progress.ts
     -- already counts these toward % Completed) must be able to push a
     -- point out of Not Started on its own, even with all 7 fixed fields
@@ -1172,7 +1183,7 @@ begin
     insert into points (
       equipment_id, panel, ip_op, analog_digital, point_number, descriptor, notes, blocked_by,
       active, on_controller, added_from_controller,
-      wired, tagged, calibrate, function_test, sequence, alarm, graphics
+      wired, tagged, calibrate, function_test, sequence, alarm, graphics, program
     )
     values (
       v_equipment_id,
@@ -1192,7 +1203,8 @@ begin
       coalesce(v_item->>'function_test', ''),
       coalesce(v_item->>'sequence', ''),
       coalesce(v_item->>'alarm', ''),
-      coalesce(v_item->>'graphics', '')
+      coalesce(v_item->>'graphics', ''),
+      coalesce(v_item->>'program', '')
     )
     returning id into v_new_id;
 
@@ -1314,6 +1326,7 @@ begin
         sequence = old_pt.sequence,
         alarm = old_pt.alarm,
         graphics = old_pt.graphics,
+        program = old_pt.program,
         notes = old_pt.notes,
         blocked_by = old_pt.blocked_by
     from points as old_pt
@@ -1376,12 +1389,12 @@ declare
   v_item jsonb;
   v_field text;
   v_point_id uuid;
-  v_allowed text[] := array['wired', 'tagged', 'calibrate', 'function_test', 'sequence', 'alarm', 'graphics', 'notes', 'blocked_by'];
+  v_allowed text[] := array['wired', 'tagged', 'calibrate', 'function_test', 'sequence', 'alarm', 'graphics', 'program', 'notes', 'blocked_by'];
 begin
   for v_item in select * from jsonb_array_elements(p_updates) loop
     v_field := v_item->>'field';
     v_point_id := (v_item->>'id')::uuid;
-    -- These are the 7 Commissioning fields (plus notes/blocked_by) -- not in
+    -- These are the 8 Commissioning fields (plus notes/blocked_by) -- not in
     -- an installer's capability list, and this RPC is callable directly
     -- against the REST endpoint regardless of whether the UI offers a
     -- button for it, same reasoning as import_points()/pair_reimported_point()

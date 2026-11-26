@@ -11,6 +11,7 @@ export const CHECK_FIELDS = [
   "sequence",
   "alarm",
   "graphics",
+  "program",
 ] as const;
 export type CheckField = (typeof CHECK_FIELDS)[number];
 
@@ -22,6 +23,7 @@ export const CHECK_FIELD_LABELS: Record<CheckField, string> = {
   sequence: "Sequence",
   alarm: "Alarm",
   graphics: "Graphics",
+  program: "Program",
 };
 
 // The installer's own checksheet, tracked separately from the commissioning
