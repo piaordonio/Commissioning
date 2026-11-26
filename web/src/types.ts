@@ -4,14 +4,14 @@ export type CheckState = "" | "check" | "x" | "na";
 // it's verified during Function Test rather than tracked as its own
 // commissioning field.
 export const CHECK_FIELDS = [
+  "program",
+  "alarm",
+  "graphics",
   "wired",
   "tagged",
   "calibrate",
   "function_test",
   "sequence",
-  "alarm",
-  "graphics",
-  "program",
 ] as const;
 export type CheckField = (typeof CHECK_FIELDS)[number];
 

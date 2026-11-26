@@ -647,6 +647,24 @@ textarea {
   font-size: 11px;
 }
 
+/* Fill the cell itself, not just tint the symbol -- scoped to .checklist-cell
+   (the grid and the printed/exported report both use this class, via the
+   same "checklist-cell checklist-${value}" combo) rather than the bare
+   .checklist-check/-x/-na classes above, which PointsCardList.tsx's mobile
+   view also reuses on just the small value span inside an already-colored
+   row (.mobile-field-row-check etc., a deliberately different, softer
+   shade) -- filling that span too would nest two different greens/reds in
+   one row. */
+.checklist-cell.checklist-check {
+  background: var(--success-bg);
+}
+.checklist-cell.checklist-x {
+  background: var(--danger-bg);
+}
+.checklist-cell.checklist-na {
+  background: var(--hover-bg);
+}
+
 .checklist-selected {
   background: var(--selection-bg) !important;
   outline: 2px solid var(--selection-outline);
